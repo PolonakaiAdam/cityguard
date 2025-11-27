@@ -1,0 +1,9 @@
+{
+  "name": "Cityguard",
+  "short_name": "Cityguard",
+  "description": "Városi bejelentések kezelése",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#060c1a",
+  "theme_color": "#060c1a",
+  "orientation": "portrait-primary",
