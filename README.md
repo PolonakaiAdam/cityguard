@@ -1,5 +1,3 @@
-# CityGuard
-
 A CityGuard egy innovatív mobilalkalmazás, amely célja, hogy egyszerű és hatékony megoldást nyújtson a városi problémák bejelentésére és kezelésére. Az alkalmazás összeköti a lakosságot az önkormányzatokkal és szolgáltatókkal, transzparenssé téve a problémamegoldási folyamatot.
 
 A CityGuard létrehozásának elsődleges célja, hogy:
