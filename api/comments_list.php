@@ -7,7 +7,6 @@ $user = require_login();
 $report_id = (int)($_GET['report_id'] ?? 0);
 if ($report_id <= 0) json_response(['error' => 'Hiányzó report_id'], 422);
 
-// citizen csak a saját reportjához
 if ($user['role'] === 'citizen') {
   $chk = db()->prepare("SELECT id FROM reports WHERE id=? AND user_id=?");
   $chk->execute([$report_id, $user['id']]);

@@ -42,7 +42,6 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
-// egyszerű színes marker (divIcon)
 function markerIcon(status) {
   const cls =
     {
@@ -69,7 +68,7 @@ async function init() {
 
   setText(
     $("#me"),
-    `${me.user.name} (${SZEREPKOR_HU[me.user.role] ?? me.user.role})`
+    `${me.user.name} (${SZEREPKOR_HU[me.user.role] ?? me.user.role})`,
   );
   $("#btnLogout").classList.remove("hidden");
   $("#btnLogout").addEventListener("click", async () => {
@@ -78,7 +77,6 @@ async function init() {
   });
 
   const map = L.map("map", {
-    // pinch zoom maradhat a térképen, de a böngésző zoom tiltva van viewport + touch-action miatt
     zoomControl: true,
   }).setView([47.4979, 19.0402], 12);
 
@@ -87,7 +85,6 @@ async function init() {
     attribution: "&copy; OpenStreetMap",
   }).addTo(map);
 
-  // minimál CSS markerhez (inline)
   const style = document.createElement("style");
   style.textContent = `
     .cg-marker .pin{width:14px;height:14px;border-radius:999px;border:2px solid rgba(15,23,42,.35);box-shadow:0 10px 20px rgba(2,6,23,.25);}
@@ -105,14 +102,14 @@ async function init() {
   } catch (e) {
     setText(
       $("#mapMsg"),
-      e.error || "Nem sikerült betölteni a térképes adatokat."
+      e.error || "Nem sikerült betölteni a térképes adatokat.",
     );
   }
 
   if (items.length === 0) {
     setText(
       $("#mapMsg"),
-      "Nincs megjeleníthető bejelentés (nincs koordináta)."
+      "Nincs megjeleníthető bejelentés (nincs koordináta).",
     );
     return;
   }
@@ -132,7 +129,7 @@ async function init() {
       Cím: ${escapeHtml(r.address)}<br/>
       Beküldte: ${escapeHtml(r.created_by)}<br/>
       <span style="color:#64748b;font-size:12px;">${escapeHtml(
-        r.created_at
+        r.created_at,
       )}</span>
     `;
 

@@ -200,8 +200,6 @@ async function loadCategories() {
       opt.textContent = c.name;
       sel.appendChild(opt);
     });
-
-    // Alapértelmezett kiválasztás (ha van legalább egy kategória)
     if (data.items.length > 0) {
       sel.value = data.items[0].id;
     }
@@ -435,7 +433,6 @@ async function refreshMe() {
 
 /* ===== Eseménykezelők ===== */
 
-// Helyszín módszer váltás
 document.querySelectorAll('input[name="locationMethod"]').forEach((radio) => {
   radio.addEventListener("change", function () {
     LOCATION.method = this.value;
@@ -493,7 +490,6 @@ $("#btnCreateReport")?.addEventListener("click", async () => {
       `Sikeres beküldés! Bejelentés sorszáma: #${res.id}`,
     );
 
-    // Reset űrlap
     $("#reportTitle").value = "";
     $("#reportDesc").value = "";
     $("#reportAddress").value = "";
@@ -511,7 +507,6 @@ $("#btnCreateReport")?.addEventListener("click", async () => {
   }
 });
 
-// Auth események
 $("#toRegister")?.addEventListener("click", () => showAuthPanel("register"));
 $("#toLogin")?.addEventListener("click", () => showAuthPanel("login"));
 

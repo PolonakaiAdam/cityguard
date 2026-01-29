@@ -1,7 +1,6 @@
 :root {
-  /* Cityguard: biztonság/hatósági hangulat */
-  --bg1: #0ea5e9; /* teal-kék */
-  --bg2: #1e3a8a; /* mély navy */
+  --bg1: #0ea5e9;
+  --bg2: #1e3a8a;
 
   --card: rgba(255, 255, 255, 0.94);
   --text: #0f172a;
@@ -11,7 +10,6 @@
   --shadow2: 0 10px 26px rgba(2, 6, 23, 0.11);
   --radius: 16px;
 
-  /* státusz színek */
   --st-new-bg: rgba(245, 158, 11, 0.18);
   --st-new-br: rgba(245, 158, 11, 0.3);
 
@@ -34,7 +32,7 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  touch-action: pan-x pan-y; /* scroll marad, pinch-zoom tiltva */
+  touch-action: pan-x pan-y;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -125,7 +123,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: none; /* csak nagyobb képernyőn */
+  display: none;
 }
 
 .topbar-right {
@@ -451,7 +449,6 @@ button {
   }
 }
 
-/* Hosszú szövegek biztonságos törése */
 .report-title,
 .comment,
 .list li,

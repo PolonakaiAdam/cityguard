@@ -17,7 +17,6 @@ if (mb_strlen($comment) > 2000) {
   json_response(['error' => 'A komment túl hosszú (max 2000 karakter).'], 422);
 }
 
-// citizen csak saját reporthoz
 if ($user['role'] === 'citizen') {
   $chk = db()->prepare("SELECT id FROM reports WHERE id=? AND user_id=?");
   $chk->execute([$report_id, $user['id']]);

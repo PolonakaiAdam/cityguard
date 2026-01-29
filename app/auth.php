@@ -5,7 +5,6 @@ function start_session(): void {
   $cfg = require __DIR__ . '/../config/config.php';
   session_name($cfg['session_name']);
 
-  // ✅ nagyon fontos: a cookie a /cityguard/ alatt legyen érvényes
   session_set_cookie_params([
     'path' => '/cityguard/',
     'httponly' => true,
