@@ -55,6 +55,12 @@ function showAuthedUI(user) {
   $("#reportsCard").classList.toggle("hidden", !user);
   $("#btnLogout").classList.toggle("hidden", !user);
 
+  // Térkép gomb elrejtése / megjelenítése
+  const mapLink = document.querySelector('.topbar-right a[href="map.php"]');
+  if (mapLink) {
+    mapLink.classList.toggle("hidden", !user);
+  }
+
   if (!user) {
     setText($("#me"), "Nincs bejelentkezve");
     $("#roleBadge").textContent = "—";
@@ -65,7 +71,6 @@ function showAuthedUI(user) {
   setText($("#me"), `${user.name} (${SZEREPKOR_HU[user.role] ?? user.role})`);
   $("#roleBadge").textContent = SZEREPKOR_HU[user.role] ?? user.role;
 }
-
 let ME = null;
 
 /* ===== HELY meghatározás (GPS vagy térkép) ===== */
