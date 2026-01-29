@@ -301,25 +301,36 @@ async function loadComments(reportId, container) {
 }
 
 function addCommentControls(li, report) {
-  if (!canManage()) return;
+  const isStaffOrAdmin = canManage();
+  const isOwnReport = ME && report.created_by === ME.name;
+
+  // Ha sem ügyintéző, sem nem a saját bejelentése → ne mutassuk
+  if (!isStaffOrAdmin && !isOwnReport) return;
 
   const box = document.createElement("div");
   box.className = "comment-box";
 
+  // Citizen esetén egyszerűbb felület
+  const isCitizen = ME && ME.role === "citizen";
+
   box.innerHTML = `
     <div class="row" style="margin-top:12px; gap:10px;">
-      <button class="btn btn-soft" type="button" data-action="toggle">Kommentek mutatása</button>
-      <button class="btn btn-soft" type="button" data-action="thanks">Köszönő üzenet</button>
+      <button class="btn btn-soft" type="button" data-action="toggle">
+        ${isCitizen ? "Kommentek megtekintése / írása" : "Kommentek mutatása"}
+      </button>
+      ${isStaffOrAdmin ? '<button class="btn btn-soft" type="button" data-action="thanks">Köszönő üzenet</button>' : ""}
     </div>
 
     <div class="hidden" data-comments-container style="margin-top:12px;">
       <div class="comment-list"></div>
 
-      <label style="margin:12px 0 6px; display:block;">Ügyintézői megjegyzés</label>
-      <textarea rows="3" placeholder="pl. Köszönjük a bejelentést! A hibát rögzítettük, tervezett javítás: ..."></textarea>
+      <label style="margin:12px 0 6px; display:block;">
+        ${isCitizen ? "Észrevételed, kiegészítésed" : "Ügyintézői megjegyzés"}
+      </label>
+      <textarea rows="3" placeholder="${isCitizen ? "Írd meg, ha van további infód vagy kérdésed..." : "pl. Köszönjük a bejelentést! A hibát rögzítettük, tervezett javítás: ..."}"></textarea>
 
       <div class="row" style="margin-top:10px; gap:10px;">
-        <button class="btn btn-primary" type="button" data-action="send">Elküldés</button>
+        <button class="btn ${isCitizen ? "btn-secondary" : "btn-primary"}" type="button" data-action="send">Elküldés</button>
         <span class="muted small" data-msg></span>
       </div>
     </div>
@@ -340,12 +351,14 @@ function addCommentControls(li, report) {
     }
   });
 
-  thanksBtn.addEventListener("click", () => {
-    textarea.value =
-      "Köszönjük a bejelentést! A hibát rögzítettük, és hamarosan intézkedünk.";
-    container.classList.remove("hidden");
-    textarea.focus();
-  });
+  if (thanksBtn) {
+    thanksBtn.addEventListener("click", () => {
+      textarea.value =
+        "Köszönjük a bejelentést! A hibát rögzítettük, és hamarosan intézkedünk.";
+      container.classList.remove("hidden");
+      textarea.focus();
+    });
+  }
 
   sendBtn.addEventListener("click", async () => {
     const comment = textarea.value.trim();
