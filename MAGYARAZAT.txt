@@ -1,0 +1,145 @@
+CITYGUARD PROJEKT – EGYSZERŰ MAGYARÁZAT
+======================================
+
+Ez a fájl azért készült, hogy egy olyan ember is megértse a projektet,
+akinek nincs programozói tapasztalata.
+
+
+1. MI EZ A PROJEKT?
+-------------------
+A CityGuard egy hibabejelentő rendszer.
+
+Egyszerűen mondva:
+- a lakos be tud jelenteni egy problémát,
+- az ügyintéző vagy admin látja a bejelentést,
+- a státuszt át tudják állítani,
+- lehet megjegyzést írni,
+- a rendszer kezeli a profilokat, képeket és egyes kéréseket is.
+
+Ilyen problémák lehetnek például:
+- kátyú,
+- szemét,
+- közvilágítás hiba,
+- rongálás,
+- közlekedési probléma,
+- egyéb önkormányzati gond.
+
+
+2. KINEK KÉSZÜLT A RENDSZER?
+----------------------------
+A rendszer többféle felhasználót kezel.
+
+1) Lakos
+   - új bejelentést tud létrehozni,
+   - látja a bejelentéseket,
+   - látja és szerkeszti a saját profilját,
+   - üzenetet vagy kérést tud küldeni.
+
+2) Ügyintéző
+   - látja a bejelentéseket,
+   - kezeli a kéréseket,
+   - tud státuszt módosítani,
+   - tud megjegyzést írni.
+
+3) Adminisztrátor
+   - látja a bejelentéseket,
+   - kezeli a felhasználókat,
+   - törölhet dolgokat,
+   - felügyeli a rendszert.
+
+4) Önkormányzat
+   - egy összesítő nézetet lát,
+   - statisztikákat és listát lát a bejelentésekről,
+   - inkább áttekintő szerepe van.
+
+
+3. MI TÖRTÉNIK, AMIKOR VALAKI HASZNÁLJA?
+----------------------------------------
+A rendszer működését legegyszerűbben így lehet elképzelni:
+
+1) A felhasználó megnyitja az oldalt.
+2) Bejelentkezik.
+3) A rendszer megnézi, hogy milyen szerepköre van.
+4) Ennek alapján a megfelelő kezdőoldalt nyitja meg.
+5) A felhasználó műveletet végez:
+   - új bejelentést küld,
+   - megnézi a listát,
+   - módosít valamit,
+   - képet tölt fel,
+   - üzenetet küld.
+6) A böngésző elküldi a kérést a megfelelő API fájlnak.
+7) A PHP feldolgozza ezt.
+8) Az adatbázisba mentés történik.
+9) A rendszer visszaküld egy választ.
+10) A felület frissül.
+
+Röviden:
+Böngésző -> API -> adatbázis -> válasz -> képernyő frissül.
+
+
+4. A PROJEKT FŐ FUNKCIÓI
+------------------------
+
+A) Bejelentkezés és regisztráció
+- új felhasználó létrehozása,
+- belépés,
+- kilépés,
+- annak ellenőrzése, hogy ki van bejelentkezve.
+
+B) Új bejelentés létrehozása
+A lakos ki tud tölteni egy űrlapot:
+- kategória,
+- cím,
+- leírás,
+- helyszín,
+- kép.
+
+A hely megadható például:
+- GPS alapján,
+- térképes kijelöléssel.
+
+C) Bejelentések listája
+A rendszer ki tudja listázni az összes bejelentést.
+Lehet látni például:
+- címet,
+- leírást,
+- kategóriát,
+- státuszt,
+- képet,
+- beküldőt,
+- dátumot.
+
+D) Státuszkezelés
+A bejelentés állapota ilyen lehet:
+- Új
+- Folyamatban
+- Megoldva
+- Elutasítva
+
+Ezeket főleg admin és ügyintéző tudja kezelni.
+
+E) Megjegyzések
+A bejelentésekhez hozzászólás vagy megjegyzés írható.
+Ez segít a kommunikációban.
+
+F) Képfeltöltés
+Kétféle képkezelés is van:
+- bizonyíték fotó a bejelentéshez,
+- profilkép a felhasználóhoz.
+
+G) Profilkezelés
+A felhasználó tudja módosítani például:
+- a nevét,
+- email címét,
+- jelszavát,
+- profilképét.
+
+H) Kérések és üzenetek
+A felhasználó tud küldeni:
+- sima üzenetet,
+- email csere kérést,
+- jelszó-visszaállítási kérést.
+
+Ezeket a kezelő oldalon admin vagy ügyintéző láthatja és feldolgozhatja.
+
+I) Térkép
