@@ -159,3 +159,36 @@ function db_seed_defaults(PDO $pdo): void {
         $checkCategory->execute([$categoryName]);
         if (!$checkCategory->fetch()) {
             $insertCategory->execute([$categoryName]);
+        }
+    }
+
+    $defaults = [
+        ['user',         'user',         password_hash('user12345', PASSWORD_DEFAULT), 'citizen'],
+        ['admin',        'admin',        password_hash('admin',     PASSWORD_DEFAULT), 'admin'],
+        ['Önkormányzat', 'onkormanyzat', password_hash('admin',     PASSWORD_DEFAULT), 'municipality'],
+        ['Ügyintéző',    'ugyintezo',    password_hash('admin',     PASSWORD_DEFAULT), 'staff'],
+    ];
+    $check  = $pdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
+    $insert = $pdo->prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?,?,?,?)');
+    foreach ($defaults as $row) {
+        $check->execute([$row[1]]);
+        if (!$check->fetch()) $insert->execute($row);
+    }
+}
+
+// Javítja a korábbi hibásan seedelt alapfiókok jelszó hash-ét.
+// Csak akkor nyúl hozzájuk, ha pontosan a hibás, régi hash van eltárolva,
+// így nem írja felül a kézzel módosított jelszavakat.
+function db_has_column(PDO $pdo, string $table, string $column): bool {
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
+    ");
+    $stmt->execute([$table, $column]);
+    return (bool)$stmt->fetchColumn();
+}
+
+function db_apply_schema_updates(PDO $pdo): void {
+    if (!db_has_column($pdo, 'users', 'profile_image')) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN profile_image VARCHAR(255) DEFAULT NULL AFTER role");
+    }

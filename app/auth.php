@@ -24,3 +24,14 @@ function start_session(): void {
         'samesite' => $isHttps ? 'None' : 'Lax',
         'secure'   => $isHttps,
     ]);
+    session_start();
+}
+
+// Megköveteli a bejelentkezést – ha nincs session, 401-es hibát küld
+function require_login(): array {
+    start_session();
+    if (!isset($_SESSION['user'])) {
+        json_response(['error' => 'Unauthorized'], 401);
+    }
+    return $_SESSION['user'];
+}
