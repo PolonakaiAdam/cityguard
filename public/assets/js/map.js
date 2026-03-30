@@ -280,3 +280,66 @@ async function init() {
     {id:"outdoors",   label:"Szabadtéri",  layer:stadiaLayers.outdoors,   thumb:`https://tiles.stadiamaps.com/tiles/outdoors/14/9258/5724.png?api_key=${STADIA}`},
     {id:"toner",      label:"Toner",       layer:stadiaLayers.toner,      thumb:`https://tiles.stadiamaps.com/tiles/stamen_toner/14/9258/5724.png?api_key=${STADIA}`},
     {id:"watercolor", label:"Akvarell",    layer:stadiaLayers.watercolor, thumb:`https://tiles.stadiamaps.com/tiles/stamen_watercolor/14/9258/5724.jpg?api_key=${STADIA}`},
+  ], null, "gmTypes")
+
+
+    // ────────────────────────────────────────────────────────────────────────
+    // BEJELENTÉSEK BETÖLTÉSE ÉS MEGJELENÍTÉSE A TÉRKÉPEN
+    // ────────────────────────────────────────────────────────────────────────
+    // ── Bejelentések ─────────────────────────────────────────
+  try{
+    const data=await api("reports_geo_list.php")
+    const items=data.items??[]
+    if(!items.length){setText($("#mapMsg"),"Nincs megjeleníthető bejelentés.");return}
+    const bounds=[]
+    items.forEach(r=>{
+      const lat=Number(r.latitude),lng=Number(r.longitude)
+      if(!Number.isFinite(lat)||!Number.isFinite(lng)) return
+      bounds.push([lat,lng])
+            const evImgs=r.evidence_image?r.evidence_image.split(',').map(s=>s.trim()).filter(Boolean):[]
+      const imgBase = (typeof window.CG_IMG_BASE !== 'undefined') ? window.CG_IMG_BASE : '../uploads/evidence/'
+      const ev=evImgs.length?`<br/>${evImgs.map(img=>`<img src="${imgBase}${escapeHtml(img)}" style="max-width:100%;max-height:100px;border-radius:4px;margin-top:8px;margin-right:4px;cursor:pointer" onclick="openLightbox(this.src)"/>`).join('')}`:""
+      // Navigáció: ha van saját pozíció, abból indul, különben Google Maps dönti el
+      const navUrl=`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`
+      const navBtn=`<br/><a href="javascript:void(0)" onclick="openNavigation(${lat},${lng})" style="display:inline-block;margin-top:8px;padding:6px 14px;background:#1a73e8;color:#fff;border-radius:8px;text-decoration:none;font-size:.8rem;font-weight:700">🧭 Navigáció</a>`
+      L.marker([lat,lng],{icon:markerIcon(r.status)}).addTo(map)
+        .bindPopup(`<b>#${r.id} – ${escapeHtml(r.title)}</b><br/>Állapot: <b>${escapeHtml(statusHu(r.status))}</b><br/>${escapeHtml(r.category)}<br/>${escapeHtml(r.created_by)}<br/><small style="color:#64748b">${escapeHtml(r.created_at)}</small>${ev}${navBtn}`)
+    })
+    if(bounds.length) map.fitBounds(bounds,{padding:[40,40]})
+  }catch(e){setText($("#mapMsg"),e.error||"Hiba")}
+
+  // Automatikus frissítés: 10 másodpercenként
+  // Automatikus frissítés 10mp-enként (új bejelentések)
+  setInterval(async()=>{
+    try{ await api("reports_geo_list.php") }catch(e){}
+  },10000)
+
+  // GPS indítása: watchPosition folyamatosan frissíti a pozíciót
+// GPS indítása
+  // GPS indítása és saját pozíció megjelenítése
+  startGPS(map)
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// GPS ÉS NAVIGÁCIÓ
+// ────────────────────────────────────────────────────────────────────────
+// ── GPS & Navigáció ───────────────────────────────────────
+let myPosition = null
+let myMarker = null
+let routeLayer = null
+let navActive = false
+let navDestination = null
+let watchId = null
+let mapRef = null // map referencia tárolása
+
+// A felhasználó saját pozíciójának kék körvonalú jelölője
+// Saját pozíció marker ikon
+const myIcon = L.divIcon({
+  className: '',
+  html: `<div style="width:18px;height:18px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 0 0 3px rgba(26,115,232,.4),0 2px 8px rgba(0,0,0,.4)"></div>`,
+  iconSize: [18,18], iconAnchor: [9,9]
+})
+
+// GPS indítása
+function startGPS(map) {
+  mapRef = map

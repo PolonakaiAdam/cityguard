@@ -1079,3 +1079,224 @@ function renderReportItem(r, reloadFn) {
 // FELHASZNÁLÓ ADATAI MODAL – manager rákattint a bejelentő nevére
 // ────────────────────────────────────────────────────────────────────────
 // ── Felhasználó adatai modal (manager kattint a nevére) ───
+async function showUserDetailsModal(userId, userName) {
+  const overlay = document.createElement('div')
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px;'
+  const box = document.createElement('div')
+  box.style.cssText = 'background:#111827;border:1px solid rgba(148,183,255,.2);border-radius:20px;padding:28px 24px 22px;width:100%;max-width:440px;max-height:80vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.6);'
+  box.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;"><h3 style="margin:0;font-size:1.05rem;color:#e8edf8;">👤 Felhasználó adatai</h3><button id="udClose" style="background:rgba(255,255,255,.07);border:1px solid rgba(148,183,255,.2);border-radius:8px;width:32px;height:32px;color:#8da0c0;cursor:pointer;font-size:1rem;">✕</button></div><div id="udContent" style="color:#8da0c0;font-size:.9rem;">Betöltés…</div>`
+  overlay.appendChild(box)
+  document.body.appendChild(overlay)
+  const close = () => overlay.remove()
+  box.querySelector('#udClose').onclick = close
+  overlay.onclick = e => { if (e.target === overlay) close() }
+
+  try {
+    const {items=[]} = await api('admin_users_list.php')
+    const u = items.find(x => String(x.id) === String(userId))
+    if (!u) { box.querySelector('#udContent').textContent = 'Nem található.'; return }
+    const COLORS = { admin:'rgba(239,68,68,.15);border-color:rgba(239,68,68,.4);color:#fca5a5', staff:'rgba(56,189,248,.15);border-color:rgba(56,189,248,.4);color:#7dd3fc', citizen:'rgba(16,185,129,.15);border-color:rgba(16,185,129,.35);color:#6ee7b7', municipality:'rgba(245,158,11,.15);border-color:rgba(245,158,11,.35);color:#fbbf24' }
+    box.querySelector('#udContent').innerHTML = `
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;">
+        <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#0ea5e9,#1e3a8a);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1.1rem;color:#fff;flex-shrink:0;">${initials(u.name)}</div>
+        <div><div style="font-size:1rem;font-weight:700;color:#e8edf8;">${esc(u.name)}</div><div style="font-size:.8rem;color:#8da0c0;margin-top:3px;">${esc(u.email)}</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div style="padding:12px 14px;background:rgba(255,255,255,.04);border:1px solid rgba(148,183,255,.1);border-radius:10px;"><div style="font-size:.68rem;font-weight:700;color:#8da0c0;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Azonosító</div><div style="font-size:.95rem;font-weight:700;color:#38bdf8;">#${u.id}</div></div>
+        <div style="padding:12px 14px;background:rgba(255,255,255,.04);border:1px solid rgba(148,183,255,.1);border-radius:10px;"><div style="font-size:.68rem;font-weight:700;color:#8da0c0;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Szerepkör</div><div style="font-size:.82rem;font-weight:700;padding:3px 9px;border-radius:999px;border:1px solid;display:inline-block;background:${COLORS[u.role]||COLORS.citizen}">${SZEREPKOR[u.role]??u.role}</div></div>
+        <div style="padding:12px 14px;background:rgba(255,255,255,.04);border:1px solid rgba(148,183,255,.1);border-radius:10px;grid-column:span 2;"><div style="font-size:.68rem;font-weight:700;color:#8da0c0;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Regisztráció</div><div style="font-size:.88rem;color:#e8edf8;">${u.created_at?.slice(0,16)??''}</div></div>
+      </div>`
+  } catch(e) { box.querySelector('#udContent').textContent = e.error || 'Hiba' }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// STATISZTIKÁK – összesítő sor + figyelmeztető sávok a listában
+// Pl.: 5 napnál régebben kezeletlen bejelentéseknél piros figyelmeztetés
+// ────────────────────────────────────────────────────────────────────────
+// ── Közös statisztika renderer ────────────────────────────
+function renderStats(reports, statsEl, alertsEl) {
+  const now=Date.now(), DAY=86400000
+  const byStatus = s => reports.filter(r=>r.status===s)
+  const isNew=byStatus('new'), inProg=byStatus('in_progress'), resolved=byStatus('resolved'), rejected=byStatus('rejected')
+  const stale=isNew.filter(r=>(now-new Date((r.created_at||'').replace(' ','T')).getTime())>5*DAY)
+  const total=reports.length
+  statsEl.innerHTML=`<div style="padding:10px 16px;background:rgba(255,255,255,.04);border:1px solid rgba(148,183,255,.1);border-radius:10px;font-size:.85rem;color:#8da0c0">
+    Összes: <strong style="color:#e8edf8">${total}</strong> · Megoldási arány: <strong style="color:#10b981">${total?Math.round(resolved.length/total*100):0}%</strong> · Kezeletlen: <strong style="color:#f59e0b">${isNew.length+inProg.length}</strong>
+  </div>`
+  if (alertsEl) alertsEl.innerHTML=`
+    ${stale.length?`<div style="padding:12px 16px;background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.35);border-radius:10px;display:flex;align-items:center;gap:10px;margin-top:8px"><span style="font-size:1.2rem">🔴</span><div><div style="font-weight:700;color:#f87171;font-size:.88rem">${stale.length} bejelentés 5+ napja kezeletlen!</div><div style="font-size:.8rem;color:#8da0c0;margin-top:2px">${stale.map(r=>esc(r.title)).join(', ')}</div></div></div>`:''}
+    ${isNew.length>10?`<div style="padding:12px 16px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;display:flex;align-items:center;gap:10px;margin-top:8px"><span style="font-size:1.2rem">⚠️</span><div style="font-size:.88rem;color:#fbbf24;font-weight:700">Magas várakozó szám: ${isNew.length} új bejelentés</div></div>`:''}`
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// BEJELENTÉSEK LISTA – szűrő gombok és betöltés
+// ────────────────────────────────────────────────────────────────────────
+// ── Bejelentések ──────────────────────────────────────────
+// ── Aktív státusz szűrő ───────────────────────────────────
+let activeStatusFilter = ''
+
+let activeMuniStatusFilter = ''
+
+function initStatusFilterBtns() {
+  // Reports page filter buttons
+  document.querySelectorAll('#statusFilterBtns .status-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeStatusFilter = btn.dataset.status
+      document.querySelectorAll('#statusFilterBtns .status-filter-btn').forEach(b => b.classList.remove('sfb-active'))
+      btn.classList.add('sfb-active')
+      loadReports()
+    })
+  })
+  // Municipality page filter buttons
+  document.querySelectorAll('#muniStatusFilterBtns .status-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeMuniStatusFilter = btn.dataset.mstatus
+      document.querySelectorAll('#muniStatusFilterBtns .status-filter-btn').forEach(b => b.classList.remove('sfb-active'))
+      btn.classList.add('sfb-active')
+      loadMunicipalityDashboard()
+    })
+  })
+}
+
+async function loadReports() {
+  const ul=$('#list'), statsEl=$('#reportsStats'), alertsEl=$('#reportsAlerts')
+  if(ul) ul.innerHTML=''
+  if(statsEl) statsEl.innerHTML=''
+  if(alertsEl) alertsEl.innerHTML=''
+  try {
+    const {items:allItems=[]} = await api('reports_list.php')
+
+    // Update filter button counts
+    const cnt = s => allItems.filter(r=>r.status===s).length
+    const sfbAll = document.getElementById('sfbAll')
+    const sfbNew = document.getElementById('sfbNew')
+    const sfbProg = document.getElementById('sfbProg')
+    const sfbOk = document.getElementById('sfbOk')
+    const sfbRej = document.getElementById('sfbRej')
+    if(sfbAll) sfbAll.textContent = allItems.length
+    if(sfbNew) sfbNew.textContent = cnt('new')
+    if(sfbProg) sfbProg.textContent = cnt('in_progress')
+    if(sfbOk) sfbOk.textContent = cnt('resolved')
+    if(sfbRej) sfbRej.textContent = cnt('rejected')
+
+    const items = activeStatusFilter ? allItems.filter(r=>r.status===activeStatusFilter) : allItems
+
+    if(ul) {
+      ul.innerHTML=''
+      if (!items.length) { ul.innerHTML='<li style="padding:20px 0;text-align:center;color:#8da0c0">Nincs találat.</li>'; return }
+      const ORDER={new:0,in_progress:1,resolved:2,rejected:3}
+      const sorted=[...items].sort((a,b)=>(ORDER[a.status]??9)-(ORDER[b.status]??9))
+      sorted.forEach(r=> ul.appendChild(renderReportItem(r, loadReports)))
+    }
+  } catch(e) { if(ul) ul.innerHTML='<li style="padding:20px 0;text-align:center;color:#f87171">Hiba történt a betöltés során.</li>'; console.error(e) }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// ADMIN: FELHASZNÁLÓK KEZELÉSE
+// Minden user kártyáján: név/email/szerepkör szerkesztés + törlés
+// ────────────────────────────────────────────────────────────────────────
+// ── Admin: felhasználók ───────────────────────────────────
+async function loadAdminUsers() {
+  const c=$('#adminUserList'); if(!c) return
+  c.innerHTML='<div class="muted small" style="padding:20px 0">Betöltés…</div>'
+  try {
+    const {items=[]} = await api('admin_users_list.php')
+    if (!items.length) { c.innerHTML='<div class="muted small" style="text-align:center;padding:32px 0">Nincsenek felhasználók.</div>'; return }
+    c.innerHTML=''
+    items.forEach(u=>{
+      const ini=initials(u.name)
+      const rCls={admin:'role-chip--admin',staff:'role-chip--staff',citizen:'role-chip--citizen',municipality:'role-chip--municipality'}[u.role]??''
+      const row=document.createElement('div'); row.className='admin-user-row'; row.dataset.userId=u.id
+      row.innerHTML=`<div class="admin-user-header" onclick="var b=this.closest('.admin-user-row').querySelector('.admin-user-body');b.classList.toggle('hidden');this.querySelector('.chev').textContent=b.classList.contains('hidden')?'▼':'▲'">
+        <div class="admin-avatar">${ini}</div>
+        <div class="admin-user-meta">
+          <div class="meta-name"><span style="font-family:'DM Mono',monospace;font-size:.7rem;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.25);color:#38bdf8;border-radius:5px;padding:1px 6px;margin-right:6px">#${u.id}</span>${esc(u.name)}<span class="role-chip ${rCls}">${SZEREPKOR[u.role]??u.role}</span></div>
+          <div class="meta-email">${esc(u.email)}</div>
+          <div class="meta-info">Regisztráció: ${u.created_at?.slice(0,10)??''}</div>
+        </div>
+        <span class="chev" style="color:var(--text-dim);font-size:.8rem;padding-right:4px;flex-shrink:0">▲</span>
+      </div>
+      <div class="admin-user-body">
+        <div style="padding:14px 0 4px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div><div style="font-size:.72rem;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Teljes név</div><input class="admin-input" data-field="name" value="${esc(u.name)}" style="width:100%"/></div>
+            <div><div style="font-size:.72rem;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">E-mail</div><input class="admin-input" data-field="email" value="${esc(u.email)}" style="width:100%"/></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div><div style="font-size:.72rem;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Szerepkör</div>
+              <select class="admin-select" data-field="role" style="width:100%">${['citizen','staff','municipality','admin'].map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${SZEREPKOR[r]}</option>`).join('')}</select></div>
+            <div><div style="font-size:.72rem;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Új jelszó</div><input class="admin-input" data-field="password" type="password" placeholder="••••••••" style="width:100%"/></div>
+          </div>
+        </div>
+        <div class="admin-user-actions">
+          <button class="btn btn-soft btn-save" style="min-height:38px;padding:8px 18px;font-size:.83rem">💾 Mentés</button>
+          ${u.id!==ME?.id?`<button class="btn btn-danger btn-del">🗑 Törlés</button>`:'<span class="muted small">(saját fiók)</span>'}
+        </div>
+        <div class="admin-user-msg" style="margin-top:8px;min-height:18px;font-size:.8rem;color:var(--text-dim)"></div>
+      </div>`
+      row.querySelector('.btn-save').onclick=async()=>{
+        const msgEl=row.querySelector('.admin-user-msg')
+        const name=row.querySelector('[data-field=name]').value.trim(), email=row.querySelector('[data-field=email]').value.trim()
+        const role=row.querySelector('[data-field=role]').value, pass=row.querySelector('[data-field=password]').value
+        setText(msgEl,'')
+        if(!name) return setText(msgEl,'A név kötelező!')
+        if(!email) return setText(msgEl,'Az email kötelező!')
+        if(pass&&pass.length<6) return setText(msgEl,'Jelszó min. 6 karakter!')
+        const btn=row.querySelector('.btn-save'); btn.disabled=true; btn.textContent='...'
+        try {
+          await api('admin_user_update.php','POST',{user_id:u.id,name,email,role,password:pass})
+          setText(msgEl,pass?'✓ Mentve (jelszó is)':'✓ Mentve')
+          row.querySelector('[data-field=password]').value=''
+          const rCls2={admin:'role-chip--admin',staff:'role-chip--staff',citizen:'role-chip--citizen',municipality:'role-chip--municipality'}[role]??''
+          row.querySelector('.meta-name').innerHTML=`<span style="font-family:'DM Mono',monospace;font-size:.7rem;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.25);color:#38bdf8;border-radius:5px;padding:1px 6px;margin-right:6px">#${u.id}</span>${esc(name)}<span class="role-chip ${rCls2}">${SZEREPKOR[role]??role}</span>`
+          row.querySelector('.meta-email').textContent=email
+          u.name=name; u.email=email; u.role=role
+        } catch(e){ setText(msgEl,e.error||'Hiba') } finally { btn.disabled=false; btn.textContent='💾 Mentés' }
+      }
+      row.querySelector('.btn-del')?.addEventListener('click',async()=>{
+        if (!await modernConfirm('Biztosan törölni szeretnéd?','A fiók véglegesen megszűnik.')) return
+        try { await api('admin_user_delete.php','POST',{user_id:u.id}); row.remove() } catch(e){ setText(row.querySelector('.admin-user-msg'),e.error||'Hiba') }
+      })
+      c.appendChild(row)
+    })
+  } catch(e) { c.innerHTML=`<div class="muted small">${esc(e.error||'Hiba')}</div>` }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// FELHASZNÁLÓI ÜZENETEK ÉS KÉRÉSEK (Profil oldal)
+// Felhasználó küldhet üzenetet az adminnak, kérhet email/jelszó cserét
+// ────────────────────────────────────────────────────────────────────────
+// ── User üzenetek ─────────────────────────────────────────
+const sendUserMessage = (type,message,newEmail) => api('user_message.php','POST',{type,message,new_email:newEmail||''})
+
+_bind(document.getElementById('btnSendMessage'), 'click', async()=>{
+  const msg=$('#userMessageMsg'), text=$('#userMessageText')?.value?.trim(), btn=$('#btnSendMessage')
+  setText(msg,''); if(!text) return setText(msg,'Írj be egy üzenetet!')
+  btn.disabled=true
+  try { await sendUserMessage('message',text,''); setText(msg,'✓ Elküldve!'); $('#userMessageText').value=''; loadUserMessageHistory() }
+  catch(e){ setText(msg,e.error||'Hiba') } finally { btn.disabled=false }
+})
+
+const MSG_TYPE = {message:'Szabad üzenet',email_change:'Email csere',password_reset:'Jelszó reset'}
+const MSG_ST   = {pending:'Függőben',approved:'Jóváhagyva',rejected:'Elutasítva'}
+const MSG_CL   = {pending:'color:#f59e0b',approved:'color:#10b981',rejected:'color:#f87171'}
+
+async function deleteUserMessage(id) {
+  if (!await modernConfirm('Biztosan törölni szeretnéd?','Az üzenet véglegesen eltűnik.')) return
+  try { await api('user_message_delete.php','POST',{message_id:id}); loadUserMessageHistory() }
+  catch(e){ alert(e.error||'Hiba') }
+}
+
+async function loadUserMessageHistory() {
+  const c=$('#userMsgHistory'); if(!c) return
+  try {
+    const {items=[]} = await api('user_messages_list.php')
+    if (!items.length) { c.innerHTML="<p class='muted small'>Még nem küldtél üzenetet.</p>"; return }
+    c.innerHTML=items.map(m=>`<div style="padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(148,183,255,.1);margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#8da0c0">${esc(MSG_TYPE[m.type]??m.type)}</span>
+        <span style="font-size:.72rem;font-weight:700;${MSG_CL[m.status]??''}">${esc(MSG_ST[m.status]??m.status)}</span>
+        <span style="font-size:.72rem;color:#8da0c0;margin-left:auto">${m.created_at?.slice(0,16)??''}</span>
+        <button onclick="deleteUserMessage(${m.id})" style="background:rgba(244,63,94,.15);border:1px solid rgba(244,63,94,.35);color:#f87171;border-radius:6px;padding:2px 8px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit">🗑</button>
+      </div>
+      <div style="font-size:.85rem;color:#e8edf8;white-space:pre-wrap;word-break:break-word">${esc(m.message)}</div>
