@@ -18,3 +18,17 @@ if (!is_valid_email_address($email)) {
 if (strlen($pass) < 8) {
     json_response(['error' => 'A jelszó legalább 8 karakter legyen.'], 422);
 }
+
+try {
+    db()->prepare("INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'citizen')")
+       ->execute([$name, $email, password_hash($pass, PASSWORD_DEFAULT)]);
+} catch (PDOException $e) {
+    if (is_duplicate_error($e)) {
+        json_response(['error' => 'Ez az email cím már foglalt.'], 409);
+    }
+    throw $e;
+}
+
+$html = cg_render_email_layout([
+    'preheader' => 'Sikeres CityGuard regisztráció',
+    'eyebrow'   => 'Sikeres regisztráció',

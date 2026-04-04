@@ -14,3 +14,9 @@ $description = input_text($data, 'comment');
 
 if ($title === '' || $category_id <= 0) {
     json_response(['error' => 'Hiányzó adatok.'], 422);
+}
+if ($lat === null || $lng === null) {
+    json_response(['error' => 'GPS helyzet kötelező.'], 422);
+}
+if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
+    json_response(['error' => 'Hibás koordináta.'], 422);

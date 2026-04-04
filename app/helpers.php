@@ -96,3 +96,66 @@ function public_error(Throwable $e): string {
     return $msg;
 }
 
+// Konfiguráció betöltése (csak egyszer)
+function app_config(): array {
+    static $cfg = null;
+    if ($cfg === null) $cfg = require __DIR__ . '/../config/config.php';
+    return $cfg;
+}
+
+// Az alkalmazás alap URL-jét állapítja meg automatikusan (ngrok/localhost/éles)
+function base_url(): string {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    $cfg      = app_config();
+    $fallback = rtrim(preg_replace('#/public/?$#', '', $cfg['app_url'] ?? ''), '/');
+
+    $host = $_SERVER['HTTP_HOST'] ?? '';
+    if ($host === '') {
+        return $cached = ($fallback ?: 'http://localhost/cityguard');
+    }
+
+    $proto    = 'http';
+    $fwdProto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')[0]));
+    if ($fwdProto === 'https' || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')) {
+        $proto = 'https';
+    }
+
+    $script = rtrim(preg_replace('#/(public|api)(/.*)?$#', '', $_SERVER['SCRIPT_NAME'] ?? ''), '/');
+    return $cached = $proto . '://' . $host . $script;
+}
+
+// A public/ mappa URL-je (pl. emailekben lévő linkekhez)
+function public_url(string $path = ''): string {
+    return rtrim(base_url(), '/') . '/public/' . ltrim($path, '/');
+}
+
+// A public/ mappán belüli valódi fájlrendszer útvonal
+function public_path(string $path = ''): string {
+    return __DIR__ . '/../public/' . ltrim($path, '/');
+}
+
+// Verziószám statikus fájlhoz (cache töréshez)
+function public_asset_version(string $path): int {
+    return @filemtime(public_path($path)) ?: time();
+}
+
+// Régi nevek átirányítása visszafelé kompatibilitáshoz
+function cg_log(string $msg): void { app_log($msg); }
+function cg_detect_base_url(): string { return base_url(); }
+function cg_public_url(string $path = ''): string { return public_url($path); }
+function cg_ensure_dir(string $dir): void { ensure_dir($dir); }
+function cg_public_error(Throwable $e): string { return public_error($e); }
+
+// Az api/ mappa URL-je (pl. JS-ből fetch hívásokhoz)
+function cg_api_url(): string {
+    return rtrim(base_url(), '/') . '/api/';
+}
+
+
+// Aktuális kérés útvonala (pl. /cityguard/public/index.php)
+function request_path(): string {
+    return (string)($_SERVER['REQUEST_URI'] ?? '');
+}
+
