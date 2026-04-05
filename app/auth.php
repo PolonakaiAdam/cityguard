@@ -35,3 +35,6 @@ function require_login(): array {
     }
     return $_SESSION['user'];
 }
+
+// Megköveteli a megadott szerepkört (pl. ['admin', 'staff']) – ha nincs, 403-as hibát küld
+function require_role(array $roles): array {

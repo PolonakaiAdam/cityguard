@@ -4,3 +4,6 @@
 // - bootstrap / hibakezelés
 // - segédfüggvények
 // - közös szerepkör/státusz függvények
+// - adatbázis kapcsolat
+// - bejelentkezés / jogosultság kezelés
+
