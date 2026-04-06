@@ -192,3 +192,65 @@ function db_apply_schema_updates(PDO $pdo): void {
     if (!db_has_column($pdo, 'users', 'profile_image')) {
         $pdo->exec("ALTER TABLE users ADD COLUMN profile_image VARCHAR(255) DEFAULT NULL AFTER role");
     }
+}
+
+function db_repair_broken_seeded_users(PDO $pdo): void {
+    $brokenUserHash = '$2y$10$AYfmjhO91QJRKWihkIu/B.7ur5ccwmjBzpygCous7gXqErmwIIaB.';
+    $brokenAdminHash = '$2y$10$wkrPgXkotw125oN6mN5uuO35LAqeBvQmoXT6WiHXqaHSuRyf.pS6W';
+
+    $repairs = [
+        ['email' => 'user',        'expected_hash' => $brokenUserHash,  'new_password' => 'user12345', 'role' => 'citizen',      'name' => 'user'],
+        ['email' => 'admin',       'expected_hash' => $brokenAdminHash, 'new_password' => 'admin',     'role' => 'admin',        'name' => 'admin'],
+        ['email' => 'onkormanyzat','expected_hash' => $brokenAdminHash, 'new_password' => 'admin',     'role' => 'municipality', 'name' => 'Önkormányzat'],
+        ['email' => 'ugyintezo',   'expected_hash' => $brokenAdminHash, 'new_password' => 'admin',     'role' => 'staff',        'name' => 'Ügyintéző'],
+    ];
+
+    $select = $pdo->prepare('SELECT id, password_hash, role, name FROM users WHERE email = ? LIMIT 1');
+    $update = $pdo->prepare('UPDATE users SET password_hash = ?, role = ?, name = ? WHERE id = ?');
+
+    foreach ($repairs as $row) {
+        $select->execute([$row['email']]);
+        $user = $select->fetch();
+        if (!$user) {
+            continue;
+        }
+        if ((string)$user['password_hash'] !== $row['expected_hash']) {
+            continue;
+        }
+        $update->execute([
+            password_hash($row['new_password'], PASSWORD_DEFAULT),
+            $row['role'],
+            $row['name'],
+            (int)$user['id'],
+        ]);
+    }
+}
+
+// A fő adatbázis kapcsolat (singleton – csak egyszer csatlakozik)
+function db(): PDO {
+    static $pdo = null;
+    if ($pdo instanceof PDO) return $pdo;
+
+    $db = app_config()['db'];
+
+    try {
+        $pdo = db_connect($db, true);
+    } catch (Throwable $e) {
+        if (!str_contains(strtolower($e->getMessage()), 'unknown database')) throw $e;
+        // Adatbázis nem létezik – létrehozzuk
+        app_log('Adatbázis hiányzik, létrehozás: ' . $db['name']);
+        $server = db_connect($db, false);
+        $safe   = str_replace('`', '``', $db['name']);
+        $server->exec("CREATE DATABASE IF NOT EXISTS `{$safe}` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci");
+        $pdo = db_connect($db, true);
+    }
+
+    if (!(bool)$pdo->query("SHOW TABLES LIKE 'users'")->fetchColumn()) {
+        db_create_tables($pdo);
+    }
+
+    db_apply_schema_updates($pdo);
+    db_repair_broken_seeded_users($pdo);
+
+    return $pdo;
+}

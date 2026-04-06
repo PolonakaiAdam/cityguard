@@ -15,3 +15,21 @@ $sql = "SELECT r.id, r.user_id, r.title, r.description, r.status, r.created_at, 
 $params = [];
 
 $status = trim((string)($_GET['status'] ?? ''));
+if ($status !== '') {
+    $sql .= ' AND r.status = ?';
+    $params[] = $status;
+}
+
+$categoryId = (int)($_GET['category_id'] ?? 0);
+if ($categoryId > 0) {
+    $sql .= ' AND r.category_id = ?';
+    $params[] = $categoryId;
+}
+
+$sql .= ' ORDER BY r.created_at DESC LIMIT 200';
+
+$stmt = db()->prepare($sql);
+$stmt->execute($params);
+
+json_response(['items' => $stmt->fetchAll()]);
+<?php // refactor 9
