@@ -32,3 +32,24 @@ try {
 $html = cg_render_email_layout([
     'preheader' => 'Sikeres CityGuard regisztráció',
     'eyebrow'   => 'Sikeres regisztráció',
+    'title'     => '🎉 Sikeres regisztráció!',
+    'intro'     => "Szia {$name}! Sikeresen regisztráltál a CityGuard rendszerbe.",
+    'body_html' => "
+      <div style='font-family:Arial,sans-serif;font-size:15px;line-height:24px;color:#cbd5e1;margin-bottom:18px'>
+        Az alábbi adatokkal készült el a fiókod. A levél kialakítása most már ugyanazt a sötét-kék CityGuard hangulatot követi, mint maga az oldal.
+      </div>
+      " . cg_email_info_rows([
+        ['label' => 'Felhasználónév', 'value' => $name],
+        ['label' => 'E-mail cím',     'value' => $email],
+        ['label' => 'Jelszó',         'value' => $pass],
+      ]) . "
+      <div style='font-family:Arial,sans-serif;font-size:14px;line-height:22px;color:#94a3b8;margin-top:8px'>
+        Bejelentkezés után rögtön az <strong style='color:#dbeafe'>Új bejelentés</strong> oldalra jutsz.
+      </div>
+    ",
+    'footer_note' => 'Ez egy automatikus regisztrációs visszaigazolás.',
+]);
+
+send_email($email, $name, 'CityGuard – Sikeres regisztráció', $html);
+json_response(['ok' => true, 'msg' => 'Sikeres regisztráció.'], 201);
+<?php // refactor 8
