@@ -3,3 +3,16 @@ Options -Indexes
 
 RewriteEngine On
 
+# Gyoker mappa → public/index.php (belso rewrite, URL nem valtozik a bongeszobe)
+RewriteRule ^$ public/index.php [L]
+
+# Barmelyik .php fajl a gyokerbe kerulne → public/ mappabol
+RewriteRule ^(map|setup|diagnostics|reset_password|change_email|pdo_check|error|admin_messages|email_setup|test_404)\.php$ public/$1.php [L]
+
+# assets es uploads → public/-bol
+RewriteRule ^(assets|uploads)/(.*)$ public/$1/$2 [L]
+
+# Ha nincs ilyen oldal vagy fájl, menjen a saját 404 oldalra
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^.*$ public/error.php?code=404 [L,QSA]

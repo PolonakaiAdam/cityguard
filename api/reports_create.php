@@ -20,3 +20,9 @@ if ($lat === null || $lng === null) {
 }
 if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
     json_response(['error' => 'Hibás koordináta.'], 422);
+}
+
+db()->prepare("INSERT INTO reports (user_id, category_id, title, description, address, latitude, longitude) VALUES (?,?,?,?,?,?,?)")
+   ->execute([$user['id'], $category_id, $title, $description, '', $lat, $lng]);
+
+json_response(['ok' => true, 'id' => (int)db()->lastInsertId()], 201);

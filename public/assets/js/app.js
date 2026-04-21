@@ -1300,3 +1300,597 @@ async function loadUserMessageHistory() {
         <button onclick="deleteUserMessage(${m.id})" style="background:rgba(244,63,94,.15);border:1px solid rgba(244,63,94,.35);color:#f87171;border-radius:6px;padding:2px 8px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:inherit">🗑</button>
       </div>
       <div style="font-size:.85rem;color:#e8edf8;white-space:pre-wrap;word-break:break-word">${esc(m.message)}</div>
+      ${m.admin_reply?`<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.2)"><div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#38bdf8;margin-bottom:4px">💬 Admin válasz</div><div style="font-size:.84rem;color:#e8edf8;white-space:pre-wrap">${esc(m.admin_reply)}</div></div>`:''}
+    </div>`).join('')
+  } catch(e){ c.innerHTML="<p class='muted small' style='color:#f87171'>Betöltési hiba</p>" }
+}
+
+_bind(document.getElementById('btnRefreshMyMsgs'), 'click', loadUserMessageHistory)
+
+_bind(document.getElementById('btnRequestEmailChange'), 'click',async()=>{
+  const msg=$('#emailChangeMsg'),email=$('#emailChangeNew')?.value?.trim(),btn=$('#btnRequestEmailChange')
+  setText(msg,'')
+  if(!email) return setText(msg,'⚠️ Add meg az új email címet!')
+  if(!email.includes('@')) return setText(msg,'⚠️ Érvénytelen email cím!')
+  if(!ME) return setText(msg,'⚠️ Nem vagy bejelentkezve!')
+  btn.disabled=true; btn.textContent='Küldés…'; setText(msg,'Feldolgozás...')
+  try {
+    const d = await api('forgot_request.php','POST',{ type:'email_change', user_name: ME.name, new_email: email })
+    setText(msg,'✅ ' + (d.msg || 'Email-csere megerősítő levelet elküldtük!'))
+    if($('#emailChangeNew')) $('#emailChangeNew').value=''
+    if($('#emailChangeNote')) $('#emailChangeNote').value=''
+  } catch(e){ showErrorFeedback(msg, e.error||'Hiba történt. Ellenőrizd a Gmail SMTP beállítást.') }
+  finally { btn.disabled=false; btn.textContent='Email csere kérés küldése' }
+})
+
+_bind(document.getElementById('btnRequestPasswordReset'), 'click',async()=>{
+  const msg=$('#passwordResetMsg'),btn=$('#btnRequestPasswordReset')
+  setText(msg,'')
+  if(!ME) return setText(msg,'⚠️ Nem vagy bejelentkezve!')
+  btn.disabled=true; btn.textContent='Küldés…'; setText(msg,'Feldolgozás...')
+  try {
+    const d = await api('forgot_request.php','POST',{ type:'password_reset', email: ME.email })
+    setText(msg,'✅ ' + (d.msg || 'Jelszó-visszaállító levelet elküldtük!'))
+    if($('#passwordResetNote')) $('#passwordResetNote').value=''
+  } catch(e){ showErrorFeedback(msg, e.error||'Hiba történt. Ellenőrizd a Gmail SMTP beállítást.') }
+  finally { btn.disabled=false; btn.textContent='Jelszó reset kérés küldése' }
+})
+
+// ────────────────────────────────────────────────────────────────────────
+// ADMIN: KÉRÉSEK KEZELÉSE (email csere, jelszó reset kérések)
+// Staff látja és kezeli ezeket: jóváhagyás vagy elutasítás
+// ────────────────────────────────────────────────────────────────────────
+// ── Admin: kérések ────────────────────────────────────────
+const MSG_TYPE_HU = {message:'Uzenet',email_change:'Email csere',password_reset:'Jelszo reset'}
+const MSG_STATUS_HU = {pending:'Fuggoben',approved:'Jovahagyva',rejected:'Elutasitva'}
+
+async function loadAdminMessages() {
+  const c=$('#adminEmailRequests'); if(!c) return
+  try {
+    const {items=[]} = await api('admin_messages_list.php')
+    const pending=items.filter(i=>i.status==='pending').length
+    const badge=$('#adminBadge'),cnt=$('#pendingCount')
+    if(badge){badge.textContent=pending;badge.classList.toggle('hidden',pending===0)}
+    if(cnt) cnt.textContent=pending>0?`(${pending} fuggoben)`:'(nincs fuggoben)'
+    if(!items.length){c.innerHTML='<div class="muted small" style="padding:20px;text-align:center">📭 Nincs üzenet.</div>';return}
+    c.innerHTML=''
+    items.forEach(req=>{
+      const isPending=req.status==='pending'
+      const sCls={pending:'role-chip--staff',approved:'role-chip--citizen',rejected:'role-chip--admin'}[req.status]??''
+      const row=document.createElement('div'); row.className='admin-user-row'; row.style.opacity=isPending?'1':'0.55'
+      let extra='', approve=''
+      if(req.type==='email_change'&&req.new_email) extra=`<div class="meta-email" style="color:var(--sky)">Új email: <b>${esc(req.new_email)}</b></div>`
+      if(req.type==='password_reset') approve=`<div style="margin-bottom:8px"><div style="font-size:.78rem;font-weight:700;color:var(--sky);margin-bottom:5px">Új jelszó (min. 6 karakter):</div><input class="admin-input" style="width:100%" placeholder="Új jelszó" data-np="${req.id}" type="password"/></div>`
+      else if(req.type==='email_change') approve=`<div style="margin-bottom:8px;padding:10px 14px;border-radius:9px;background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.2);font-size:.83rem;color:var(--text-dim)">Jóváhagyáskor <b style="color:#e8edf8">csak az email változik</b>.</div>`
+      row.innerHTML=`<div class="admin-user-header"><div class="admin-user-meta">
+        <div class="meta-name"><span style="font-family:'DM Mono',monospace;font-size:.7rem;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.25);color:#38bdf8;border-radius:5px;padding:1px 6px;margin-right:5px">#${req.user_id}</span>${esc(req.user_name)}<span class="role-chip role-chip--staff" style="margin-left:6px">${MSG_TYPE_HU[req.type]??req.type}</span><span class="role-chip ${sCls}" style="margin-left:4px">${MSG_STATUS_HU[req.status]??req.status}</span></div>
+        <div class="meta-email">${esc(req.user_email)}</div>${extra}
+        <div class="meta-info" style="margin-top:4px;color:var(--text-dim);font-size:.85rem">${esc(req.message)}</div>
+        <div class="meta-info">Beküldve: ${esc(req.created_at)}</div>
+      </div></div>
+      ${isPending?`<div class="admin-user-actions" style="flex-wrap:wrap;gap:8px">${approve}
+        <button class="btn btn-primary btn-ok" data-id="${req.id}" data-type="${req.type}" style="min-height:36px;padding:8px 16px;font-size:.83rem">✓ Jóváhagyás</button>
+        <button class="btn btn-danger btn-no" data-id="${req.id}">✗ Elutasítás</button>
+      </div><div class="admin-user-msg" data-mr="${req.id}"></div>`:''}`
+      if (isPending) {
+        row.querySelector('.btn-ok').onclick=async()=>{
+          const msgEl=row.querySelector(`[data-mr="${req.id}"]`), pi=row.querySelector(`[data-np="${req.id}"]`), np=pi?.value?.trim()||''
+          if(req.type==='password_reset'&&np.length<6){setText(msgEl,'Min. 6 karakter!');return}
+          const btn=row.querySelector('.btn-ok'); btn.disabled=true; btn.textContent='...'
+          try {
+            const res=await api('admin_message_resolve.php','POST',{message_id:req.id,action:'approve',new_password:np})
+            if(res.info==='email_only') msgEl.innerHTML=`<div style="margin-top:10px;padding:12px 14px;border-radius:10px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3)"><div style="font-size:.78rem;font-weight:800;color:#10b981;margin-bottom:6px">✓ JÓVÁHAGYVA</div><div style="font-size:.85rem;color:#e8edf8">📧 Új email: <b>${esc(res.new_email)}</b></div></div>`
+            else if(res.info==='password_only') msgEl.innerHTML=`<div style="margin-top:10px;padding:12px 14px;border-radius:10px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3)"><div style="font-size:.78rem;font-weight:800;color:#10b981;margin-bottom:6px">✓ JÓVÁHAGYVA – közöld a userrel:</div><div style="font-size:.85rem;color:#e8edf8">🔑 Új jelszó: <b>${esc(res.new_password)}</b></div></div>`
+            else await loadAdminMessages()
+          } catch(e){ setText(msgEl,e.error||'Hiba'); btn.disabled=false; btn.textContent='✓ Jóváhagyás' }
+        }
+        row.querySelector('.btn-no').onclick=async()=>{
+          const msgEl=row.querySelector(`[data-mr="${req.id}"]`)
+          try { await api('admin_message_resolve.php','POST',{message_id:req.id,action:'reject',new_password:''}); setText(msgEl,'✗ Elutasítva'); await loadAdminMessages() }
+          catch(e){ setText(msgEl,e.error||'Hiba') }
+        }
+      }
+      c.appendChild(row)
+    })
+  } catch(e){ c.innerHTML=`<div class="muted small">${esc(e.error||'Hiba')}</div>` }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// ÖNKORMÁNYZATI DASHBOARD – összesítő nézet az önkormányzatnak
+// ────────────────────────────────────────────────────────────────────────
+// ── Önkormányzat dashboard ────────────────────────────────
+async function loadMunicipalityDashboard() {
+  const statsEl=$('#municipalityStats'), alertsEl=$('#municipalityAlerts'), reportsEl=$('#municipalityReports')
+  if (!statsEl) return
+  statsEl.innerHTML=''; alertsEl.innerHTML=''; reportsEl.innerHTML=''
+  try {
+    const {items:allReports=[]} = await api('reports_list.php')
+
+    // Update muni filter button counts
+    const cnt = s => allReports.filter(r=>r.status===s).length
+    const msfbAll = document.getElementById('msfbAll')
+    const msfbNew = document.getElementById('msfbNew')
+    const msfbProg = document.getElementById('msfbProg')
+    const msfbOk = document.getElementById('msfbOk')
+    const msfbRej = document.getElementById('msfbRej')
+    if(msfbAll) msfbAll.textContent = allReports.length
+    if(msfbNew) msfbNew.textContent = cnt('new')
+    if(msfbProg) msfbProg.textContent = cnt('in_progress')
+    if(msfbOk) msfbOk.textContent = cnt('resolved')
+    if(msfbRej) msfbRej.textContent = cnt('rejected')
+
+    const reports = activeMuniStatusFilter
+      ? allReports.filter(r=>r.status===activeMuniStatusFilter)
+      : allReports
+
+    renderStats(allReports, statsEl, alertsEl)
+    const ORDER={new:0,in_progress:1,resolved:2,rejected:3}
+    const sorted=[...reports].sort((a,b)=>(ORDER[a.status]??9)-(ORDER[b.status]??9))
+    reportsEl.innerHTML=''
+    const secHead=document.createElement('div')
+    secHead.style.cssText='display:flex;align-items:center;justify-content:space-between;margin:20px 0 12px'
+    secHead.innerHTML=`<h2 style="font-size:1rem;margin:0">Bejelentések részletesen</h2><span class="muted small">${sorted.length} db</span>`
+    reportsEl.appendChild(secHead)
+    const ul=document.createElement('ul'); ul.className='list'
+    if (!sorted.length) {
+      ul.innerHTML='<li style="padding:20px 0;text-align:center;color:#8da0c0">Nincs találat.</li>'
+    } else {
+      sorted.forEach(r=> ul.appendChild(renderReportItem(r, loadMunicipalityDashboard)))
+    }
+    reportsEl.appendChild(ul)
+  } catch(e){ statsEl.innerHTML=`<div class="muted small" style="color:#f87171">${esc(e.error||'Hiba')}</div>` }
+}
+
+_bind(document.getElementById('btnRefreshMunicipality'), 'click', loadMunicipalityDashboard)
+
+// ────────────────────────────────────────────────────────────────────────
+// PROFIL MENTÉSE – név, email, jelszó módosítása
+// ────────────────────────────────────────────────────────────────────────
+// ── Profil mentés ─────────────────────────────────────────
+_bind(document.getElementById('btnSaveProfile'), 'click',async()=>{
+  const msg=$('#profileMsg'), name=$('#profileName')?.value?.trim(), email=$('#profileEmail')?.value?.trim()
+  const pass=$('#profilePassword')?.value??'', confirm=$('#profilePasswordConfirm')?.value??''
+  setText(msg,'')
+  if(!name||!email) return setText(msg,'Név és email kötelező.')
+  if(pass&&pass!==confirm) return setText(msg,'A két jelszó nem egyezik.')
+  if(pass&&pass.length<8) return setText(msg,'Jelszó min. 8 karakter.')
+  const btn=$('#btnSaveProfile'); btn.disabled=true; btn.textContent='Mentés…'
+  try {
+    const saved = await api('user_update_profile.php','POST',{name,email,password:pass})
+    setText(msg,'✓ Mentve.')
+    ME = saved.user || { ...ME, name, email }
+    if (!ME.name) ME.name = name
+    if (!ME.email) ME.email = email
+    refreshIdentityVisuals(ME)
+    if($('#profilePassword'))        $('#profilePassword').value=''
+    if($('#profilePasswordConfirm')) $('#profilePasswordConfirm').value=''
+  } catch(e){ setText(msg,e.error||'Hiba') } finally { btn.disabled=false; btn.textContent='Változtatások mentése' }
+})
+
+
+// ────────────────────────────────────────────────────────────────────────
+// PROFILKÉP – feltöltés és törlés a Fiókom oldalon
+// Minden logika itt marad az app.js-ben, hogy könnyű legyen követni.
+// ────────────────────────────────────────────────────────────────────────
+_bind(document.getElementById('profileAvatarFile'), 'change', e => {
+  const file = e?.target?.files?.[0]
+  const msg = $('#profileAvatarMsg')
+  setText(msg, '')
+  if (!file) return
+  const okTypes = ['image/jpeg','image/png','image/webp']
+  if (file.size > 10 * 1024 * 1024) return setText(msg, 'A profilkép legfeljebb 10 MB lehet.')
+  if (file.type && !okTypes.includes(file.type)) return setText(msg, 'Csak JPG, PNG vagy WEBP kép engedélyezett.')
+  const reader = new FileReader()
+  reader.onload = ev => {
+    const preview = $('#profileAvatarPreview')
+    if (!preview) return
+    preview.textContent = ''
+    preview.style.backgroundImage = `url("${ev.target?.result || ''}")`
+    preview.style.backgroundSize = 'cover'
+    preview.style.backgroundPosition = 'center'
+    preview.style.backgroundRepeat = 'no-repeat'
+  }
+  reader.readAsDataURL(file)
+})
+
+_bind(document.getElementById('btnUploadProfileImage'), 'click', async () => {
+  const input = $('#profileAvatarFile')
+  const file = input?.files?.[0]
+  const msg = $('#profileAvatarMsg')
+  const btn = $('#btnUploadProfileImage')
+  setText(msg, '')
+  if (!file) return setText(msg, 'Először válassz ki egy képet.')
+  btn.disabled = true
+  const oldText = btn.textContent
+  btn.textContent = 'Feltöltés…'
+  try {
+    const data = await uploadProfileImage(file)
+    ME = data.user || { ...ME, profile_image: data.file }
+    if (!ME.profile_image) ME.profile_image = data.file
+    refreshIdentityVisuals(ME)
+    if (input) input.value = ''
+    setText(msg, '✓ Profilkép sikeresen feltöltve.')
+  } catch (e) {
+    setText(msg, e.message || e.error || 'Hiba történt.')
+    if (ME) refreshIdentityVisuals(ME)
+  } finally {
+    btn.disabled = false
+    btn.textContent = oldText
+  }
+})
+
+_bind(document.getElementById('btnRemoveProfileImage'), 'click', async () => {
+  const msg = $('#profileAvatarMsg')
+  const btn = $('#btnRemoveProfileImage')
+  setText(msg, '')
+  if (!ME?.profile_image) return setText(msg, 'Jelenleg nincs feltöltött profilkép.')
+  btn.disabled = true
+  const oldText = btn.textContent
+  btn.textContent = 'Törlés…'
+  try {
+    const data = await api('delete_profile_image.php','POST',{})
+    ME = data.user || { ...ME, profile_image: null }
+    ME.profile_image = null
+    refreshIdentityVisuals(ME)
+    const input = $('#profileAvatarFile'); if (input) input.value = ''
+    setText(msg, '✓ Profilkép törölve.')
+  } catch (e) {
+    setText(msg, e.error || 'Hiba történt.')
+  } finally {
+    btn.disabled = false
+    btn.textContent = oldText
+  }
+})
+
+// ────────────────────────────────────────────────────────────────────────
+// BEJELENTKEZÉSI ÁLLAPOT – refreshMe() lekéri ki van bejelentkezve
+// Ez fut le oldalbetöltéskor és kijelentkezés után is.
+// ────────────────────────────────────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────
+async function refreshMe() {
+  try {
+    const data=await api('auth_me.php'); ME=data.user; showAuthedUI(ME)
+    if (ME) {
+      await loadCategories(); updateLocUI()
+      if (['admin','staff'].includes(ME.role)) {
+        try {
+          const {items=[]}=await api('admin_messages_list.php')
+          const p=items.filter(i=>i.status==='pending').length
+          const b=$('#adminBadge'); if(b){b.textContent=p;b.classList.toggle('hidden',p===0)}
+        } catch(e){}
+        startPolling()
+      }
+      startReportsPolling() // minden felhasználónál live frissítés
+      // Ha URL-ben van ?view= paraméter (pl. map.php-ről érkezve), azt nyitjuk meg,
+      // de csak akkor, ha az adott szerepkör tényleg láthatja azt a nézetet.
+      const urlParams = new URLSearchParams(window.location.search)
+      const urlView = urlParams.get('view')
+      const fromExternal = urlParams.get('from') === 'external'
+
+      if (urlView && fromExternal && canOpenView(ME, urlView)) {
+        showView(urlView)
+      } else {
+        showView(getDefaultViewForRole(ME.role))
+      }
+    } else { stopPolling(); stopReportsPolling() }
+  } catch(e){ showAuthedUI(null); stopPolling(); stopReportsPolling() }
+  return ME
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// HELYMEGHATÁROZÁS MÓDSZER VÁLTÁS (GPS vs. Térkép)
+// ────────────────────────────────────────────────────────────────────────
+// ── Events ────────────────────────────────────────────────
+document.querySelectorAll('input[name="locationMethod"]').forEach(r=>r.addEventListener('change',function(){
+  LOCATION.method=this.value; $('#gpsSection')?.classList.toggle('hidden',this.value!=='gps'); if(!reportMap) initReportMap(); updateLocUI()
+}))
+_bind(document.getElementById('btnGetGps'), 'click', getGps)
+
+// ────────────────────────────────────────────────────────────────────────
+// KÉP FELTÖLTÉS ELŐNÉZET (Új bejelentés)
+// selectedFiles[] tárolja a kiválasztott képeket.
+// Drag & Drop és fájlválasztó is működik. Duplikátumszűrés beépítve.
+// ────────────────────────────────────────────────────────────────────────
+// ── Képelőnézet az új bejelentéshez ──────────────────────
+let selectedFiles = []
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(0) + ' KB'
+  return (bytes/(1024*1024)).toFixed(1) + ' MB'
+}
+
+function renderEvidencePreview() {
+  const labelText = document.getElementById('evidenceLabelText')
+  const preview   = document.getElementById('evidencePreview')
+  const emptyState = document.getElementById('evidenceEmpty')
+  if (labelText) labelText.textContent = selectedFiles.length ? `${selectedFiles.length} kép hozzáadva` : 'Kép hozzáadása'
+  if (!preview) return
+  preview.innerHTML = ''
+
+  const hasFiles = selectedFiles.length > 0
+  if (emptyState) emptyState.style.display = hasFiles ? 'none' : 'flex'
+
+  selectedFiles.forEach((file, idx) => {
+    const reader = new FileReader()
+    reader.onload = e => {
+      const wrap = document.createElement('div')
+      wrap.className = 'evidence-thumb'
+
+      const img = document.createElement('img')
+      img.src = e.target.result
+      img.alt = file.name
+      img.onclick = () => openLightbox(img.src)
+
+      const del = document.createElement('button')
+      del.className = 'evidence-thumb-del'
+      del.title = 'Kép eltávolítása'
+      del.innerHTML = '✕'
+      del.onclick = ev => { ev.stopPropagation(); selectedFiles.splice(idx, 1); renderEvidencePreview() }
+
+      const sizeBadge = document.createElement('div')
+      sizeBadge.className = 'evidence-thumb-size'
+      sizeBadge.textContent = formatFileSize(file.size)
+
+      const name = document.createElement('div')
+      name.className = 'evidence-thumb-name'
+      name.textContent = file.name
+
+      wrap.append(img, del, sizeBadge, name)
+      preview.appendChild(wrap)
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+// Drag & drop a drop zone-ra
+const _dropZone = document.getElementById('evidenceDropZone')
+if (_dropZone) {
+  _dropZone.addEventListener('dragover', e => { e.preventDefault(); _dropZone.classList.add('drag-over') })
+  _dropZone.addEventListener('dragleave', e => { if (!_dropZone.contains(e.relatedTarget)) _dropZone.classList.remove('drag-over') })
+  _dropZone.addEventListener('drop', e => {
+    e.preventDefault(); _dropZone.classList.remove('drag-over')
+    const dropped = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'))
+    dropped.forEach(f => { if (!selectedFiles.some(x => x.name===f.name && x.size===f.size)) selectedFiles.push(f) })
+    renderEvidencePreview()
+  })
+  _dropZone.addEventListener('click', e => {
+    if (e.target === _dropZone || e.target.id === 'evidenceEmpty' || e.target.closest('#evidenceEmpty')) {
+      document.getElementById('evidence')?.click()
+    }
+  })
+}
+
+_bind(document.getElementById('evidence'), 'change', function() {
+  // Új fájlokat HOZZÁADJUK a meglévőkhöz, nem felváltjuk
+  const newFiles = Array.from(this.files)
+  newFiles.forEach(newFile => {
+    // Duplikáció elkerülése (azonos név + méret)
+    const isDupe = selectedFiles.some(f => f.name === newFile.name && f.size === newFile.size)
+    if (!isDupe) selectedFiles.push(newFile)
+  })
+  // Input reset hogy ugyanazt a fájlt újra lehessen választani
+  this.value = ''
+  renderEvidencePreview()
+})
+
+_bind(document.getElementById('btnCreateReport'), 'click',async()=>{
+  const msg=$('#createMsg'); setText(msg,'')
+  const cat=+$('#categorySelect')?.value, title=$('#reportTitle')?.value?.trim()
+  const comment = $('#reportComment')?.value?.trim() || ''
+  if(!cat) return setText(msg,'Válassz kategóriát!')
+  if(!title) return setText(msg,'Add meg a bejelentés címét!')
+  if(!LOCATION.lat) return setText(msg,'Kötelező helyszínt megadni!')
+  const files = selectedFiles.slice()
+  try {
+    const {id}=await api('reports_create.php','POST',{category_id:cat,title,latitude:LOCATION.lat,longitude:LOCATION.lng,comment})
+    let txt=`Sikeres beküldés! #${id}`
+    if(files.length){
+      setText(msg,'Képek feltöltése…')
+      for(const file of files) { await uploadEvidence(id, file) }
+      txt+=` (${files.length} képpel)`
+    }
+    setText(msg,txt)
+    ;['#reportTitle','#categorySelect'].forEach(s=>{ if($(s)) $(s).value='' })
+    if($('#reportComment')) $('#reportComment').value = ''
+    selectedFiles = [] // tömb ürítése beküldés után
+    const evidenceInput = document.getElementById('evidence')
+    if(evidenceInput) evidenceInput.value = ''
+    const preview = document.getElementById('evidencePreview')
+    if(preview) preview.innerHTML = ''
+    const labelText = document.getElementById('evidenceLabelText')
+    if(labelText) labelText.textContent = 'Bizonyíték feltöltése'
+    LOCATION={lat:null,lng:null,acc:null,method:'gps'}
+    if(reportMarker){reportMarker.remove();reportMarker=null}
+    if(gpsCircle){gpsCircle.remove();gpsCircle=null}
+    reportMap?.setView([47.4979,19.0402],13); updateLocUI()
+  } catch(e){ setText(msg,e.error||e.message||'Hiba') }
+})
+
+
+
+// ────────────────────────────────────────────────────────────────────────
+// URL PARAMÉTER KEZELÉS – pl. jelszó reset után vissza a login oldalra
+// Ha ?reset=success van az URL-ben, megmutatja a sikeres visszajelzést
+// ────────────────────────────────────────────────────────────────────────
+;(function handleAuthStatusFromUrl(){
+  const params = new URLSearchParams(window.location.search)
+  const reset = params.get('reset')
+  const type = params.get('type')
+  if (reset !== 'success') return
+  showAuthPanel('login')
+  const msg = $('#loginMsg')
+  if (!msg) return
+  if (type === 'email') setText(msg, '✅ Email címed sikeresen megváltozott! Most már bejelentkezhetsz.')
+  else setText(msg, '✅ Jelszavad sikeresen megváltozott! Most már bejelentkezhetsz.')
+  if (window.history && window.history.replaceState) {
+    const clean = window.location.pathname + window.location.hash
+    window.history.replaceState({}, document.title, clean)
+  }
+})()
+
+
+// ────────────────────────────────────────────────────────────────────────
+// BEJELENTKEZÉS ÉS REGISZTRÁCIÓ
+// Enter billentyűre is működik (keydown eseményfigyelők lent)
+// ────────────────────────────────────────────────────────────────────────
+// Bejelentkezés gomb
+_bind(document.getElementById('btnLogin'), 'click',async()=>{
+  const msg=$('#loginMsg'), email=$('#loginEmail')?.value?.trim(), pass=$('#loginPassword')?.value
+  setText(msg,'')
+  if (!email) return setText(msg,'⚠️ Add meg az email címedet vagy felhasználónevedet!')
+  if (!pass)  return setText(msg,'⚠️ Add meg a jelszavad!')
+  const btn=$('#btnLogin'); btn.disabled=true; btn.textContent='Belépés...'
+  try {
+    await api('auth_login.php','POST',{email,password:pass})
+    await refreshMe()
+  } catch(e) {
+    const err = e.error || ''
+    if (!err || err.toLowerCase().includes('szerver') || err.toLowerCase().includes('apache') || err.toLowerCase().includes('mysql')) {
+      showErrorFeedback(msg, '🔴 ' + (err || 'Szerver nem elérhető – ellenőrizd hogy fut-e az Apache és MySQL (XAMPP).'))
+    } else {
+      showErrorFeedback(msg, err + (e.status ? ' [HTTP ' + e.status + ']' : ''))
+    }
+  } finally { btn.disabled=false; btn.textContent='Belépés' }
+})
+;['#loginEmail','#loginPassword'].forEach(s=>{ var el=document.getElementById(s.slice(1)); _bind(el,'keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.getElementById('btnLogin')?.click()}}) })
+
+_bind(document.getElementById('btnRegister'), 'click',async()=>{
+  const msg=$('#regMsg')
+  const name=$('#regName')?.value?.trim()
+  const email=$('#regEmail')?.value?.trim()
+  const pass=$('#regPassword')?.value
+  setText(msg,'')
+  if (!name)  return setText(msg,'⚠️ Add meg a neved!')
+  if (!email) return setText(msg,'⚠️ Add meg az email címedet vagy felhasználónevedet!')
+
+  if (!pass)  return setText(msg,'⚠️ Add meg a jelszavad!')
+
+  if (!$('#privacyConsent')?.checked) return setText(msg,'⚠️ Az adatkezelési tájékoztató elfogadása kötelező.')
+  const btn=$('#btnRegister'); btn.disabled=true; btn.textContent='Regisztráció...'
+  try {
+    await api('auth_register.php','POST',{name,email,password:pass})
+    setText(msg,'✅ Sikeres regisztráció! Most jelentkezz be.')
+    showAuthPanel('login'); $('#loginEmail').value=email; $('#loginPassword').value=''; $('#loginPassword').focus()
+  } catch(e) {
+    const err = e.error || ''
+    if (!err || err.toLowerCase().includes('szerver') || err.toLowerCase().includes('apache') || err.toLowerCase().includes('mysql')) {
+      showErrorFeedback(msg, '🔴 ' + (err || 'Szerver nem elérhető – ellenőrizd hogy fut-e az Apache és MySQL (XAMPP).'))
+    } else {
+      showErrorFeedback(msg, err + (e.status ? ' [HTTP ' + e.status + ']' : ''))
+    }
+  } finally { btn.disabled=false; btn.textContent='Fiók létrehozása' }
+})
+;['regName','regEmail','regPassword'].forEach(function(id){ var el=document.getElementById(id); _bind(el,'keydown',function(e){if(e.key==='Enter'){e.preventDefault();document.getElementById('btnRegister')?.click()}}) })
+
+_bind(document.getElementById('btnLoadMessages'), 'click', loadAdminMessages)
+_bind(document.getElementById('btnLoad'), 'click', loadReports)
+_bind(document.getElementById('btnLoadUsers'), 'click', loadAdminUsers)
+
+// Kijelentkezés: leállítja a pollingot, törli a session-t, újra betölti az UI-t
+async function doLogout() {
+  stopPolling(); stopReportsPolling();
+  try{await api('auth_logout.php','POST',{})}finally{
+    ME=null;LOCATION={lat:null,lng:null,acc:null,method:'gps'};updateLocUI();
+    if (window.location.search) history.replaceState(null,'',window.location.pathname);
+    await refreshMe()
+  }
+}
+_bind(document.getElementById('btnLogout'), 'click', doLogout)
+_bind(document.getElementById('btnLogoutMobile'), 'click',()=>{closeNav();doLogout()})
+
+// ────────────────────────────────────────────────────────────────────────
+// LIVE FRISSÍTÉS (POLLING) – 5 másodpercenként ellenőrzi a változásokat
+// reportsHash(): egy "ujjlenyomatot" készít a listából, így észreveszi a változást
+// startReportsPolling(): minden usernek, de csak ha a lista látható
+// startPolling(): admin/staff-nak, kommenteket is frissíti
+// ────────────────────────────────────────────────────────────────────────
+// ── Polling ───────────────────────────────────────────────
+let pollInterval = null
+let reportsPollInterval = null
+let lastReportsHash = null
+
+// Bejelentések hash-e (gyors változásérzékelés)
+function reportsHash(items) {
+  return items.map(r => `${r.id}:${r.status}`).join(',')
+}
+
+function startReportsPolling() {
+  if (reportsPollInterval) return
+  reportsPollInterval = setInterval(async () => {
+    if (!ME) return
+    // Csak ha a reports vagy municipality nézet aktív
+    const reportsVisible = !$('#reportsCard')?.classList.contains('hidden')
+    const municipalityVisible = !$('#municipalityCard')?.classList.contains('hidden')
+    if (!reportsVisible && !municipalityVisible) return
+    try {
+      const {items=[]} = await api('reports_list.php')
+      const hash = reportsHash(items)
+      if (hash !== lastReportsHash) {
+        lastReportsHash = hash
+        if (reportsVisible) loadReports()
+        if (municipalityVisible) loadMunicipalityDashboard()
+      }
+    } catch(e) {}
+  }, 5000) // 5 másodpercenként
+}
+
+function stopReportsPolling() {
+  if (reportsPollInterval) { clearInterval(reportsPollInterval); reportsPollInterval = null }
+}
+
+function startPolling() {
+  if (pollInterval) return
+  pollInterval = setInterval(async () => {
+    if (!ME) return
+
+    // Nyitott komment panelek live frissítése
+    for (const [reportId, listEl] of openCommentPanels) {
+      if (document.contains(listEl)) {
+        loadComments(reportId, listEl)
+      } else {
+        openCommentPanels.delete(reportId)
+      }
+    }
+
+    // Bejelentések lista frissítése ha változott
+    const reportsVisible = !$('#reportsCard')?.classList.contains('hidden')
+    const municipalityVisible = !$('#municipalityCard')?.classList.contains('hidden')
+    if (!reportsVisible && !municipalityVisible) return
+    try {
+      const {items=[]} = await api('reports_list.php')
+      const hash = reportsHash(items)
+      if (hash !== lastReportsHash) {
+        lastReportsHash = hash
+        if (reportsVisible) loadReports()
+        if (municipalityVisible) loadMunicipalityDashboard()
+      }
+    } catch(e) {}
+  }, 5000)
+}
+function stopPolling() { if(pollInterval){clearInterval(pollInterval);pollInterval=null} }
+
+
+// ────────────────────────────────────────────────────────────────────────
+// INIT – oldal indulásakor ez fut le
+// ────────────────────────────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  // Auth panel navigáció
+  var ids = {
+    toRegister: function(){ showAuthPanel('register') },
+    toLogin:    function(){ showAuthPanel('login') }
+  }
+  Object.keys(ids).forEach(function(id) {
+    var el = document.getElementById(id)
+    if (el) el.addEventListener('click', ids[id])
+  })
+
+  showAuthPanel('login')
+  updateLocUI()
+  initStatusFilterBtns()
+  refreshMe()
+  // Térkép inicializálás a háttérben – így már készen van mire a user rákattint
+  // Kis késleltetés hogy a refreshMe() ne legyen blokkolva
+  setTimeout(initReportMap, 300)
+})

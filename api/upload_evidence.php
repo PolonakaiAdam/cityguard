@@ -16,3 +16,24 @@ $mime    = mime_content_type($file['tmp_name']);
 $allowed = ['image/jpeg', 'image/png', 'image/webp'];
 if (!in_array($mime, $allowed)) json_response(['error' => 'Csak jpg/png/webp engedélyezett.'], 400);
 
+$ext     = in_array(strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'webp'])
+           ? strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)) : 'jpg';
+$newName = 'evidence_' . $report_id . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+
+$uploadDir = __DIR__ . '/../public/uploads/evidence/';
+ensure_dir($uploadDir);
+
+if (!move_uploaded_file($file['tmp_name'], $uploadDir . $newName)) {
+    json_response(['error' => 'Fájl mentése sikertelen.'], 500);
+}
+
+// Meglévő képekhez hozzáfűzés (vesszővel elválasztva)
+$stmt = db()->prepare('SELECT evidence_image FROM reports WHERE id = ?');
+$stmt->execute([$report_id]);
+$existing = $stmt->fetchColumn();
+
+$newValue = ($existing && trim($existing) !== '') ? $existing . ',' . $newName : $newName;
+db()->prepare('UPDATE reports SET evidence_image = ? WHERE id = ?')->execute([$newValue, $report_id]);
+
+json_response(['ok' => true, 'file' => $newName]);
+

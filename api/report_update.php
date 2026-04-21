@@ -19,3 +19,23 @@ if (!$report) {
     json_response(['error' => 'Nem található.'], 404);
 }
 
+$isOwner   = (int)$report['user_id'] === (int)$user['id'];
+$isManager = cg_is_manager_role((string)$user['role']);
+
+if (!$isOwner && !$isManager) {
+    json_response(['error' => 'Tiltott.'], 403);
+}
+
+$title       = input_text($data, 'title');
+$category_id = input_int($data, 'category_id');
+$lat         = input_float_or_null($data, 'latitude');
+$lng         = input_float_or_null($data, 'longitude');
+
+if ($title === '' || $category_id <= 0 || $lat === null || $lng === null) {
+    json_response(['error' => 'Hiányzó mezők.'], 422);
+}
+
+db()->prepare('UPDATE reports SET title=?, category_id=?, latitude=?, longitude=? WHERE id=?')
+   ->execute([$title, $category_id, $lat, $lng, $id]);
+
+json_response(['ok' => true]);

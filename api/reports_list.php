@@ -32,4 +32,4 @@ $stmt = db()->prepare($sql);
 $stmt->execute($params);
 
 json_response(['items' => $stmt->fetchAll()]);
-<?php // refactor 9
+

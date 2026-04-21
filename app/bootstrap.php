@@ -33,3 +33,27 @@ set_exception_handler(function (Throwable $e): void {
             'debug' => ['type' => get_class($e), 'file' => basename($e->getFile()), 'line' => $e->getLine()],
         ], 500);
     }
+
+    redirect_to_error_page(500, $safeMessage, request_path());
+});
+
+// Végzetes PHP hibák (pl. szintaxishiba, elfogy a memória)
+register_shutdown_function(function (): void {
+    $err = error_get_last();
+    $fatal = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+    if (!$err || !in_array($err['type'] ?? 0, $fatal, true)) return;
+
+    $safeMessage = 'Végzetes szerverhiba. Nézd meg a storage/logs/app.log fájlt.';
+    app_log('VÉGZETES: ' . ($err['message'] ?? '') . ' @ ' . ($err['file'] ?? '') . ':' . ($err['line'] ?? 0));
+    while (ob_get_level() > 0) @ob_end_clean();
+
+    if (expects_json_response()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['error' => $safeMessage], JSON_UNESCAPED_UNICODE);
+        return;
+    }
+
+    redirect_to_error_page(500, $safeMessage, request_path());
+});
+

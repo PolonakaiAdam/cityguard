@@ -143,3 +143,322 @@ A felhasználó tud küldeni:
 Ezeket a kezelő oldalon admin vagy ügyintéző láthatja és feldolgozhatja.
 
 I) Térkép
+A projektben külön térképes oldal is van.
+Ez arra való, hogy a bejelentések helye könnyebben áttekinthető legyen.
+
+J) Önkormányzati áttekintés
+Az önkormányzati szerepkör egy külön dashboardot lát.
+Ez egy összesítő oldal, nem elsősorban szerkesztésre szolgál.
+
+
+5. SZEREPKÖR SZERINT KI MIT LÁT?
+--------------------------------
+A projekt egyik fontos része, hogy nem mindenki ugyanazt látja.
+
+A leegyszerűsített logika nagyjából ez:
+- Lakos -> Új bejelentés, Bejelentések, Profil
+- Ügyintéző -> Bejelentések, Profil, Kérések
+- Admin -> Bejelentések, Profil, Admin felület
+- Önkormányzat -> Önkormányzati áttekintés, Profil
+
+A kezdőoldal is szerepkör szerint változik:
+- Lakos -> Új bejelentés
+- Ügyintéző -> Bejelentések
+- Admin -> Bejelentések
+- Önkormányzat -> Önkormányzati áttekintés
+
+Ez azért jó, mert a felhasználó rögtön arra az oldalra kerül,
+amelyik neki a legfontosabb.
+
+
+6. HOGYAN NÉZ KI A PROJEKT BELÜLRŐL?
+------------------------------------
+A projekt több fő részből áll.
+
+A) public/
+Ez a látható rész.
+A böngésző innen nyitja meg az oldalt.
+
+Fontos fájlok:
+- public/index.php
+  Ez a főoldal.
+  Itt jelenik meg a felület.
+
+- public/map.php
+  Ez a térképes oldal.
+
+- public/change_email.php
+  Email-csere visszaigazolás oldala.
+
+- public/reset_password.php
+  Jelszó-visszaállítás oldala.
+
+- public/assets/css/style.css
+  Az oldal kinézete.
+
+- public/assets/js/app.js
+  A fő JavaScript logika.
+  Ez mozgatja a gombokat, nézeteket, űrlapokat, kéréseket.
+
+- public/assets/js/map.js
+  A térképpel kapcsolatos működés.
+
+B) api/
+Ez a háttérben dolgozó rész.
+A böngésző ezekhez a fájlokhoz küld kéréseket.
+
+Példák:
+- auth_login.php -> belépés
+- auth_register.php -> regisztráció
+- auth_me.php -> ki van most bejelentkezve
+- reports_create.php -> új bejelentés mentése
+- reports_list.php -> bejelentések listázása
+- reports_update_status.php -> státusz módosítása
+- report_delete.php -> bejelentés törlése
+- report_update.php -> bejelentés szerkesztése
+- comments_create.php -> komment létrehozása
+- comments_list.php -> kommentek betöltése
+- upload_evidence.php -> bizonyíték kép feltöltése
+- upload_profile_image.php -> profilkép feltöltése
+- user_message.php -> felhasználói üzenet küldése
+- admin_messages_list.php -> admin oldalon a kérések listája
+- admin_user_update.php -> felhasználó módosítása
+- admin_user_delete.php -> felhasználó törlése
+
+C) app/
+Ez a projekt közös motorja.
+Itt vannak azok a fájlok, amiket sok más fájl használ.
+
+Legfontosabbak:
+- app/api.php
+  Közös betöltő az API fájlokhoz.
+  Olyan, mint egy központi induló csomag.
+
+- app/bootstrap.php
+  Elindítja az alkalmazás alap működését,
+  például hibakezelést.
+
+- app/helpers.php
+  Általános segédfüggvények.
+  Olyan kis újrahasznosítható eszközök,
+  amelyeket sok helyen használ a rendszer.
+
+- app/auth.php
+  Bejelentkezés és jogosultság ellenőrzése.
+  Megnézi, hogy a felhasználó belépett-e,
+  és van-e joga valamit csinálni.
+
+- app/db.php
+  Adatbázis kapcsolat és tábla létrehozás.
+
+- app/domain.php
+  Közös szótár.
+  Itt vannak például a szerepkörök és státuszok nevei.
+
+- app/mailer.php
+  Email küldéssel kapcsolatos logika.
+
+D) config/
+- config/config.php
+  Itt vannak a beállítások,
+  például az adatbázis adatai és az alap URL.
+
+E) sql/
+- sql/cityguard.sql
+  Az adatbázis szerkezete.
+  Megmondja, milyen táblák legyenek.
+
+F) storage/
+Ez inkább technikai háttérmappa.
+Például naplófájlok vagy ideiglenes dolgok lehetnek itt.
+
+G) uploads/
+Itt tárolódnak a feltöltött képek.
+Például:
+- bizonyíték képek,
+- profilképek.
+
+
+7. MI AZ ADATBÁZIS SZEREPE?
+---------------------------
+Az adatbázis a projekt memóriája.
+Itt maradnak meg az adatok akkor is, ha bezárod a böngészőt.
+
+Fő táblák:
+
+1) users
+   A felhasználók adatai.
+   Például:
+   - név,
+   - email,
+   - jelszó,
+   - szerepkör,
+   - profilkép.
+
+2) categories
+   A bejelentés kategóriái.
+   Például kátyú, szemét, egyéb.
+
+3) reports
+   A bejelentések fő táblája.
+   Itt van maga a hibabejelentés.
+
+4) report_comments
+   A bejelentésekhez tartozó megjegyzések.
+
+5) user_messages
+   A felhasználók által küldött kérések és üzenetek.
+
+6) email_change_requests
+   Email-csere folyamatok tárolása.
+
+7) password_resets
+   Jelszó-visszaállítási adatok.
+
+8) email_change_tokens
+   Email-változtatás megerősítéséhez szükséges adatok.
+
+
+8. HOGYAN LETT LEEGYSZERŰSÍTVE A KÓD?
+--------------------------------------
+A tiszta kód lényege nem az, hogy a kód rövidebb legyen,
+hanem az, hogy könnyebb legyen olvasni és javítani.
+
+Ebben a projektben a leegyszerűsítés lényege nagyjából ez:
+
+A) Az ismétlődő dolgok közös helyre kerültek
+Például:
+- segédfüggvények egy helyre,
+- szerepkör nevek egy helyre,
+- státusz nevek egy helyre,
+- API indulás egy helyre.
+
+Ez azért jó, mert ha valamit módosítani kell,
+nem sok fájlban kell keresni ugyanazt.
+
+B) A szerepkör-logika külön lett kezelve
+Nem össze-vissza van szétszórva, hogy ki mit láthat,
+hanem külön szabály dönti el.
+
+C) A kezdőoldal logika külön helyre került
+Most már könnyebb megérteni, hogy:
+- lakos miért az új bejelentéshez jut,
+- admin miért a bejelentésekhez,
+- önkormányzat miért az összesítőhöz.
+
+D) A hibák kezelése rendezettebb lett
+Van közös hibakezelés és logolás.
+Ez segít, ha valami elromlik.
+
+E) A fájlszerkezet átláthatóbb lett
+A projekt külön mappákra van bontva:
+- public = amit a felhasználó lát,
+- api = háttérkérések,
+- app = közös motor,
+- config = beállítások,
+- sql = adatbázis.
+
+Ezt egy kezdő is könnyebben átlátja.
+
+
+9. MIT CSINÁL A FŐ JAVASCRIPT FÁJL?
+-----------------------------------
+A public/assets/js/app.js az egyik legfontosabb fájl.
+
+Nagyon leegyszerűsítve ez intézi:
+- a nézetváltást,
+- a belépés utáni képernyőt,
+- az űrlapok beküldését,
+- az API hívásokat,
+- a listák betöltését,
+- a törléseket,
+- a státuszváltásokat,
+- a kommentek megjelenítését,
+- a képelőnézetet,
+- a profil műveleteket,
+- az admin kérések kezelését.
+
+Olyan, mint a látható felület "irányító központja".
+
+
+10. MI TÖRTÉNIK TÖRLÉSKOR?
+--------------------------
+Például amikor admin töröl egy bejelentést:
+
+1) A gombra kattint a felhasználó.
+2) A JavaScript meghívja a megfelelő API-t.
+3) Az API ellenőrzi, hogy a felhasználó jogosult-e.
+4) Ha igen, az adatbázisból törli a bejegyzést.
+5) A rendszer visszajelez.
+6) A lista újratöltődik.
+
+Ha bármelyik rész hibás,
+akár egy rossz fájlnév vagy rossz kérés miatt,
+akkor jelenhet meg olyan hiba, mint például a "Hibás adatok".
+
+
+11. MIÉRT JÓ EZ A SZERKEZET EGY NEM HOZZÁÉRTŐNEK IS?
+----------------------------------------------------
+Azért, mert könnyebb fejben szétválasztani a részeket.
+
+Például:
+- Ha a kinézet rossz -> valószínűleg CSS.
+- Ha a gomb nem reagál -> valószínűleg JavaScript.
+- Ha a mentés nem működik -> valószínűleg API vagy adatbázis.
+- Ha a belépés hibás -> auth rész.
+- Ha a jogosultság rossz -> szerepkör ellenőrzés.
+
+Vagyis könnyebb megtalálni, hogy melyik rész mivel foglalkozik.
+
+
+12. HOL KERESS, HA VALAMIT MÓDOSÍTANI AKARSZ?
+---------------------------------------------
+
+Ha ezt szeretnéd... -> itt érdemes keresni
+
+- oldal kinézete -> public/assets/css/style.css
+- gombok, nézetek, felület -> public/assets/js/app.js
+- térkép -> public/assets/js/map.js és public/map.php
+- főoldal felépítése -> public/index.php
+- belépés/regisztráció -> api/auth_*.php + app/auth.php
+- bejelentések -> api/reports_*.php
+- kommentek -> api/comments_*.php
+- képfeltöltés -> api/upload_*.php
+- felhasználók kezelése -> api/admin_user_*.php
+- üzenetek/kérések -> api/admin_messages_*.php és api/user_message*.php
+- adatbázis -> app/db.php és sql/cityguard.sql
+- általános segédek -> app/helpers.php
+- szerepkörök és státuszok -> app/domain.php
+- beállítások -> config/config.php
+
+
+13. RÖVID ÖSSZEFOGLALÁS EGY MONDATBAN
+-------------------------------------
+A CityGuard egy több szerepkörös, térképes, képfeltöltős,
+önkormányzati hibabejelentő rendszer, ahol a lakos bejelent,
+a kezelő feldolgoz, az admin felügyel, az önkormányzat pedig áttekint.
+
+
+14. LEGMAGYARABB, LEGEGYSZERŰBB ÖSSZEFOGLALÁS
+---------------------------------------------
+Ha nagyon egyszerűen kellene elmondani, akkor ez a projekt ezt tudja:
+
+- Van egy oldal.
+- Az emberek be tudnak lépni.
+- A lakos hibát tud bejelenteni.
+- A rendszer elmenti.
+- A kezelők látják.
+- Tudnak rá reagálni.
+- Tudják módosítani az állapotát.
+- Lehet képet csatolni.
+- Lehet profilképet használni.
+- Lehet üzenetet és kérelmet küldeni.
+- A különböző szerepkörök mást-mást látnak.
+- Minden adat adatbázisba kerül.
+
+
+15. FONTOS MEGJEGYZÉS
+---------------------
+Ez a magyarázat azért egyszerűsített, hogy könnyen érthető legyen.
+Nem programozói szakkönyv, hanem egy emberi nyelvű leírás arról,
+hogy a projekt nagyjából mit csinál és melyik része mire való.

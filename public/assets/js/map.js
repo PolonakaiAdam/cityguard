@@ -343,3 +343,115 @@ const myIcon = L.divIcon({
 // GPS indítása
 function startGPS(map) {
   mapRef = map
+  if (!navigator.geolocation) return
+  watchId = navigator.geolocation.watchPosition(pos => {
+    myPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+    if (!myMarker) {
+      myMarker = L.marker([myPosition.lat, myPosition.lng], {icon: myIcon, zIndexOffset: 1000}).addTo(map)
+      myMarker.bindTooltip('📍 Te vagy itt', {permanent: false, direction: 'top'})
+    } else {
+      myMarker.setLatLng([myPosition.lat, myPosition.lng])
+    }
+    // Ha navigáció aktív, frissítsük az útvonalat
+    if (navActive && navDestination) {
+      drawRoute(map, myPosition.lat, myPosition.lng, navDestination.lat, navDestination.lng, false)
+    }
+  }, () => {}, { enableHighAccuracy: true, maximumAge: 5000 })
+}
+
+// OSRM nyílt forráskódú útvonaltervező API hívása
+// OSRM útvonal rajzolás
+async function drawRoute(map, fromLat, fromLng, toLat, toLng, fitBounds=true) {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`
+    const res = await fetch(url)
+    const data = await res.json()
+    if (!data.routes?.length) return
+
+    // Régi útvonal törlése
+    if (routeLayer) map.removeLayer(routeLayer)
+
+    const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]])
+    routeLayer = L.polyline(coords, {
+      color: '#1a73e8', weight: 5, opacity: 0.85,
+      dashArray: null, lineCap: 'round', lineJoin: 'round'
+    }).addTo(map)
+
+    if (fitBounds) map.fitBounds(routeLayer.getBounds(), {padding: [40,40]})
+
+    // Távolság és idő megjelenítése
+    const dist = (data.routes[0].distance / 1000).toFixed(1)
+    const mins = Math.round(data.routes[0].duration / 60)
+    showNavInfo(dist, mins)
+  } catch(e) {
+    console.error('Route error:', e)
+  }
+}
+
+// Navigációs infó panel: távolság és menetidő megjelenítése
+// Navigációs infó panel
+let navInfoEl = null
+function showNavInfo(dist, mins) {
+  if (!navInfoEl) {
+    navInfoEl = document.createElement('div')
+    navInfoEl.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2000;background:#1a2035;border:1px solid rgba(148,183,255,.2);border-radius:16px;padding:12px 20px;display:flex;align-items:center;gap:16px;box-shadow:0 4px 24px rgba(0,0,0,.4);font-family:inherit'
+    document.body.appendChild(navInfoEl)
+  }
+  navInfoEl.innerHTML = `
+    <div style="text-align:center">
+      <div style="font-size:1.4rem;font-weight:800;color:#38bdf8;line-height:1">${dist} km</div>
+      <div style="font-size:.7rem;color:#8da0c0;margin-top:2px">távolság</div>
+    </div>
+    <div style="width:1px;height:32px;background:rgba(148,183,255,.2)"></div>
+    <div style="text-align:center">
+      <div style="font-size:1.4rem;font-weight:800;color:#10b981;line-height:1">${mins} perc</div>
+      <div style="font-size:.7rem;color:#8da0c0;margin-top:2px">menetidő</div>
+    </div>
+    <div style="width:1px;height:32px;background:rgba(148,183,255,.2)"></div>
+    <button onclick="stopNavigation()" style="padding:8px 14px;border-radius:10px;background:rgba(244,63,94,.15);border:1px solid rgba(244,63,94,.4);color:#f87171;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit">✕ Leállítás</button>
+  `
+}
+
+// Navigáció leállítása
+function stopNavigation() {
+  navActive = false
+  navDestination = null
+  if (routeLayer && mapRef) { mapRef.removeLayer(routeLayer); routeLayer = null }
+  if (navInfoEl) { navInfoEl.remove(); navInfoEl = null }
+}
+
+// Navigáció indítása a bejelentés popup gombból
+// Navigáció indítása a popup gombból
+function openNavigation(destLat, destLng) {
+  navDestination = { lat: destLat, lng: destLng }
+  navActive = true
+
+  const startNav = (fromLat, fromLng) => {
+    drawRoute(mapRef, fromLat, fromLng, destLat, destLng, true)
+    // Térképet centráljuk a saját pozícióra
+    mapRef.setView([fromLat, fromLng], 15)
+  }
+
+  if (myPosition) {
+    startNav(myPosition.lat, myPosition.lng)
+  } else {
+    // GPS lekérés
+    navigator.geolocation?.getCurrentPosition(
+      pos => {
+        myPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        if (!myMarker && mapRef) {
+          myMarker = L.marker([myPosition.lat, myPosition.lng], {icon: myIcon, zIndexOffset: 1000}).addTo(mapRef)
+        }
+        startNav(myPosition.lat, myPosition.lng)
+      },
+      () => alert('GPS nem elérhető. Engedélyezd a helymeghatározást!'),
+      { enableHighAccuracy: true, timeout: 8000 }
+    )
+  }
+}
+
+
+// ────────────────────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => { init() })
+
+<?php // refactor 7

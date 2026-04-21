@@ -38,3 +38,9 @@ function require_login(): array {
 
 // Megköveteli a megadott szerepkört (pl. ['admin', 'staff']) – ha nincs, 403-as hibát küld
 function require_role(array $roles): array {
+    $user = require_login();
+    if (!in_array($user['role'], $roles, true)) {
+        json_response(['error' => 'Forbidden'], 403);
+    }
+    return $user;
+}

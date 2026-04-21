@@ -159,3 +159,55 @@ function request_path(): string {
     return (string)($_SERVER['REQUEST_URI'] ?? '');
 }
 
+// Eldönti, hogy a kérés inkább API / JSON választ vár-e
+function expects_json_response(): bool {
+    $uri = strtolower(request_path());
+    if (str_contains($uri, '/api/')) return true;
+
+    $accept = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
+    if (str_contains($accept, 'application/json')) return true;
+
+    $requestedWith = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''));
+    if ($requestedWith === 'xmlhttprequest') return true;
+
+    return false;
+}
+
+// Hibaoldal URL összeállítása (pl. loghoz vagy kézi linkhez)
+function error_page_url(int $code = 500, string $msg = '', string $from = ''): string {
+    $proto = 'http';
+    $host  = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $fwdProto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')[0]));
+    if ($fwdProto === 'https' || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')) {
+        $proto = 'https';
+    }
+
+    $script = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    if (preg_match('#^(.*)/public/[^/]+$#', $script, $m)) {
+        $publicBase = rtrim($m[1] . '/public', '/');
+    } elseif (preg_match('#^(.*)/api/[^/]+$#', $script, $m)) {
+        $publicBase = rtrim($m[1] . '/public', '/');
+    } else {
+        $dir = rtrim(str_replace('\\', '/', dirname($script)), '/');
+        $publicBase = ($dir === '.' || $dir === '/') ? '' : $dir;
+    }
+
+    $query = ['code' => $code];
+    if ($msg !== '')  $query['msg'] = $msg;
+    if ($from !== '') $query['from'] = $from;
+    return $proto . '://' . $host . $publicBase . '/error.php?' . http_build_query($query);
+}
+
+// HTML hibaoldalt jelenít meg azonnal, átirányítás nélkül
+function redirect_to_error_page(int $code = 500, string $msg = '', string $from = ''): void {
+    if (!headers_sent()) {
+        http_response_code($code);
+    }
+
+    $_GET['code'] = (string)$code;
+    if ($msg !== '')  $_GET['msg'] = $msg;
+    if ($from !== '') $_GET['from'] = $from;
+
+    require __DIR__ . '/../public/error.php';
+    exit;
+}

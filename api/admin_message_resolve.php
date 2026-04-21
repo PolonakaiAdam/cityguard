@@ -20,3 +20,17 @@ $response = ['ok' => true];
 
 if ($action === 'approve') {
     if ($msg['type'] === 'email_change') {
+        db()->prepare('UPDATE users SET email = ? WHERE id = ?')->execute([$msg['new_email'], $msg['user_id']]);
+        $response['info'] = 'email_changed';
+    } elseif ($msg['type'] === 'password_reset') {
+        if ($newPass === '' || strlen($newPass) < 6) json_response(['error' => 'Új jelszó min. 6 karakter.'], 422);
+        db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+           ->execute([password_hash($newPass, PASSWORD_DEFAULT), $msg['user_id']]);
+        $response['info'] = 'password_changed';
+    }
+}
+
+db()->prepare("UPDATE user_messages SET status = ?, resolved_at = NOW() WHERE id = ?")
+   ->execute([$action === 'approve' ? 'approved' : 'rejected', $msgId]);
+
+json_response($response);
