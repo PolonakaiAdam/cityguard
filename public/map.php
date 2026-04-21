@@ -103,8 +103,9 @@ $mapJsVer = public_asset_version('assets/js/map.js');
       transform: translateX(-50%);
       background: rgba(6,12,26,0.9); border: 1px solid var(--border);
       backdrop-filter: blur(12px); padding: 8px 16px; border-radius: 20px;
-      font-size: 0.82rem; color: var(--text-dim); z-index: 1001;
+      font-size: 0.84rem; color: #e8edf8; z-index: 2000;
       white-space: nowrap; display: none;
+      pointer-events: none;
     }
     #mapMsg:not(:empty) { display: block; }
 

@@ -13,6 +13,20 @@ $done    = false;
 
 // ── Segédfüggvények ──────────────────────────────────────────
 
+// public_url(): a bejelentkezési oldal URL-je az átirányításhoz
+function public_url(string $path = ''): string {
+    $proto = 'http';
+    $fwd = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')[0]));
+    if ($fwd === 'https' || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')) {
+        $proto = 'https';
+    }
+    $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $script = rtrim(preg_replace('#/install\.php$#', '', $_SERVER['SCRIPT_NAME'] ?? ''), '/');
+    $base   = $proto . '://' . $host . $script;
+    return rtrim($base, '/') . '/public/' . ltrim($path, '/');
+}
+
+
 function run_step(string $title, callable $fn): void {
     global $steps, $success;
     try {

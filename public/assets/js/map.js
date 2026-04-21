@@ -308,10 +308,38 @@ async function init() {
     if(bounds.length) map.fitBounds(bounds,{padding:[40,40]})
   }catch(e){setText($("#mapMsg"),e.error||"Hiba")}
 
-  // Automatikus frissítés: 10 másodpercenként
-  // Automatikus frissítés 10mp-enként (új bejelentések)
+  // Automatikus frissítés: 10 másodpercenként – új markerek hozzáadása
+  // Az első betöltéskor feljegyezzük az összes már megjelenített ID-t
+  const knownIds = new Set(items.map(r => r.id))
+
   setInterval(async()=>{
-    try{ await api("reports_geo_list.php") }catch(e){}
+    try{
+      const refreshData = await api("reports_geo_list.php")
+      const allItems = refreshData.items ?? []
+      const newItems = allItems.filter(r => !knownIds.has(r.id))
+      if(!newItems.length) return
+
+      // Új markerek kirajzolása
+      newItems.forEach(r=>{
+        const lat=Number(r.latitude), lng=Number(r.longitude)
+        if(!Number.isFinite(lat)||!Number.isFinite(lng)) return
+        knownIds.add(r.id)
+        const evImgs=r.evidence_image?r.evidence_image.split(',').map(s=>s.trim()).filter(Boolean):[]
+        const imgBase=(typeof window.CG_IMG_BASE!=='undefined')?window.CG_IMG_BASE:'../uploads/evidence/'
+        const ev=evImgs.length?`<br/>${evImgs.map(img=>`<img src="${imgBase}${escapeHtml(img)}" style="max-width:100%;max-height:100px;border-radius:4px;margin-top:8px;margin-right:4px;cursor:pointer" onclick="openLightbox(this.src)"/>`).join('')}`:""
+        const navBtn=`<br/><a href="javascript:void(0)" onclick="openNavigation(${lat},${lng})" style="display:inline-block;margin-top:8px;padding:6px 14px;background:#1a73e8;color:#fff;border-radius:8px;text-decoration:none;font-size:.8rem;font-weight:700">🧭 Navigáció</a>`
+        L.marker([lat,lng],{icon:markerIcon(r.status)}).addTo(map)
+          .bindPopup(`<b>#${r.id} – ${escapeHtml(r.title)}</b><br/>Állapot: <b>${escapeHtml(statusHu(r.status))}</b><br/>${escapeHtml(r.category)}<br/>${escapeHtml(r.created_by)}<br/><small style="color:#64748b">${escapeHtml(r.created_at)}</small>${ev}${navBtn}`)
+      })
+
+      // Toast értesítés az új bejelentésekről
+      const toastEl = $("#mapMsg")
+      if(toastEl){
+        setText(toastEl, `🔔 ${newItems.length} új bejelentés érkezett`)
+        toastEl._toastTimer && clearTimeout(toastEl._toastTimer)
+        toastEl._toastTimer = setTimeout(()=>{ setText(toastEl,'') }, 5000)
+      }
+    }catch(e){}
   },10000)
 
   // GPS indítása: watchPosition folyamatosan frissíti a pozíciót
