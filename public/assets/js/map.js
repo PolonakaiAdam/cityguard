@@ -8,8 +8,31 @@
 // ════════════════════════════════════════════════════════════════════════
 
 // API végpont alap URL-je
-const API_BASE = (typeof window.CG_MAP_API_BASE !== "undefined") ? window.CG_MAP_API_BASE : "../api/"
-const PROFILE_IMG_BASE = (typeof window.CG_PROFILE_IMG_BASE !== "undefined") ? window.CG_PROFILE_IMG_BASE : "../uploads/profiles/"
+// Ha a PHP nem adta meg, kiszámítjuk az aktuális URL-ből (XAMPP-barát)
+function detectApiBase() {
+  if (typeof window.CG_MAP_API_BASE !== "undefined" && window.CG_MAP_API_BASE) {
+    return window.CG_MAP_API_BASE
+  }
+  // Visszafelé navigálunk: /public/map.php → /api/
+  const loc = window.location.href
+  const pubIdx = loc.indexOf('/public/')
+  if (pubIdx !== -1) return loc.slice(0, pubIdx) + '/api/'
+  return '../api/'
+}
+function detectImgBase(type) {
+  const key = type === 'profile' ? window.CG_PROFILE_IMG_BASE : window.CG_IMG_BASE
+  if (typeof key !== "undefined" && key) return key
+  const loc = window.location.href
+  const pubIdx = loc.indexOf('/public/')
+  if (pubIdx !== -1) {
+    const pub = loc.slice(0, pubIdx) + '/public/uploads/'
+    return type === 'profile' ? pub + 'profiles/' : pub + 'evidence/'
+  }
+  return type === 'profile' ? '../uploads/profiles/' : '../uploads/evidence/'
+}
+
+const API_BASE = detectApiBase()
+const PROFILE_IMG_BASE = detectImgBase('profile')
 
 // ngrok esetén szükséges speciális fejléc hozzáadása a kérésekhez
 function addNgrokHeaders(opt) {
@@ -161,11 +184,14 @@ async function init() {
     maxBounds:[[-60,-180],[75,180]], maxBoundsViscosity:1.0, worldCopyJump:false
   }).setView([47.4979,19.0402],13)
 
+  // Leaflet méretének frissítése – a #map CSS-sel van méretezve,
+  // de Leaflet-nek tudnia kell a tényleges méretről (különben szürke csíkok jelennek meg)
+  setTimeout(() => { map.invalidateSize() }, 150)
+  window.addEventListener("resize", () => { map.invalidateSize() })
+
   L.control.zoom({position:"topleft"}).addTo(map)
 
   // Domborzati réteg (csak a rétegváltóban használjuk)
-  const topoLayer = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",{maxZoom:17,attribution:"&copy; OpenTopoMap"})
-
   document.head.insertAdjacentHTML("beforeend",`<style>
     .cg-marker .pin{width:16px;height:16px;border-radius:999px;border:2.5px solid rgba(255,255,255,.9);box-shadow:0 2px 8px rgba(0,0,0,.4)}
     .cg-marker.m-new .pin{background:#f59e0b}.cg-marker.m-prog .pin{background:#0ea5e9}
@@ -176,39 +202,49 @@ async function init() {
   // RÉTEGVÁLTÓ – Google Maps stílusú panel (jobb alul)
   // Típusok: Alap, Műhold, Domborzat | Stílusok: Smooth, Sötét, Szabadtéri stb.
   // ────────────────────────────────────────────────────────────────────────
-  // ── Rétegváltó ──────────────────────────────────────────
-  // ── Google Maps stílusú rétegváltó ─────────────────────
-  const STADIA = 'bca32bab-2628-4306-a25b-8fa429a5d10b'
+  // ── Rétegváltó – megbízható ingyenes csempeszolgáltatók ─
+  // OSM: alap, CartoDB: stílusos variációk, Google: műhold
   let activeLayer = null
 
+  const osmLayer   = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {maxZoom:19, attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', subdomains:'abc'})
+  const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    {maxZoom:20, attribution:'© OpenStreetMap © CARTO', subdomains:'abcd'})
+  const cartoDark  = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    {maxZoom:20, attribution:'© OpenStreetMap © CARTO', subdomains:'abcd'})
+  const cartoVoy   = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    {maxZoom:20, attribution:'© OpenStreetMap © CARTO', subdomains:'abcd'})
+  const topoLayer  = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    {maxZoom:17, attribution:'© OpenTopoMap'})
+
+  // stadiaLayers referencia megtartása a rétegváltó makeGrid hívásokhoz
   const stadiaLayers = {
-    smooth:     L.tileLayer(`https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}.png?api_key=${STADIA}`,{maxZoom:20,attribution:"© Stadia Maps"}),
-    dark:       L.tileLayer(`https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png?api_key=${STADIA}`,{maxZoom:20,attribution:"© Stadia Maps"}),
-    satellite:  L.tileLayer(`https://tiles.stadiamaps.com/tiles/alidade_satellite/{z}/{x}/{y}.png?api_key=${STADIA}`,{maxZoom:20,attribution:"© Stadia Maps"}),
-    bright:     L.tileLayer(`https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}.png?api_key=${STADIA}`,{maxZoom:20,attribution:"© Stadia Maps"}),
-    outdoors:   L.tileLayer(`https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}.png?api_key=${STADIA}`,{maxZoom:20,attribution:"© Stadia Maps"}),
-    toner:      L.tileLayer(`https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}.png?api_key=${STADIA}`,{maxZoom:20,attribution:"© Stadia Maps"}),
-    watercolor: L.tileLayer(`https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg?api_key=${STADIA}`,{maxZoom:18,attribution:"© Stadia Maps"}),
+    bright:     osmLayer,
+    smooth:     cartoLight,
+    dark:       cartoDark,
+    outdoors:   cartoVoy,
+    toner:      cartoDark,
+    watercolor: cartoLight,
   }
 
-  activeLayer = stadiaLayers.bright
-  stadiaLayers.bright.addTo(map)
+  activeLayer = osmLayer
+  osmLayer.addTo(map)
 
-  const gSatBase   = L.tileLayer("https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",{maxZoom:21,subdomains:["0","1","2","3"],attribution:"© Google"})
-  const gSatLabels = L.tileLayer("https://mt{s}.google.com/vt/lyrs=h&x={x}&y={y}&z={z}",{maxZoom:21,subdomains:["0","1","2","3"]})
+  const gSatBase   = L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{maxZoom:21,subdomains:['0','1','2','3'],attribution:'© Google'})
+  const gSatLabels = L.tileLayer('https://mt{s}.google.com/vt/lyrs=h&x={x}&y={y}&z={z}',{maxZoom:21,subdomains:['0','1','2','3']})
   const gSatLayer  = L.layerGroup([gSatBase,gSatLabels])
 
   document.head.insertAdjacentHTML("beforeend",`<style>
-    #gmBtn{position:fixed;bottom:calc(36px + var(--safe-bottom,0px));right:16px;z-index:1001;
+    #gmBtn{position:fixed;bottom:calc(16px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));right:16px;z-index:1001;
       width:54px;height:54px;border-radius:8px;background:#fff;
       box-shadow:0 2px 10px rgba(0,0,0,.35);display:flex;flex-direction:column;
       align-items:center;justify-content:center;cursor:pointer;gap:3px;border:none;font-family:inherit;}
     #gmBtn:hover{box-shadow:0 4px 16px rgba(0,0,0,.4);}
     #gmBtn .gm-th{width:38px;height:28px;border-radius:4px;background-size:cover;background-position:center;border:2px solid rgba(0,0,0,.15);}
     #gmBtn .gm-lb{font-size:.6rem;font-weight:600;color:#333;line-height:1;}
-    #gmPanel{position:fixed;bottom:calc(100px + var(--safe-bottom,0px));right:16px;z-index:1002;
+    #gmPanel{position:fixed;bottom:calc(80px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));right:16px;z-index:1002;
       background:#fff;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.3);
-      width:320px;max-width:calc(100vw - 32px);display:none;flex-direction:column;overflow:hidden;}
+      width:320px;max-width:calc(100vw - 32px);display:none;flex-direction:column;overflow:hidden;max-height:calc(100dvh - 120px);overflow-y:auto;}
     #gmPanel.on{display:flex;}
     .gm-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;border-bottom:1px solid #e8eaed;}
     .gm-head span{font-size:.85rem;font-weight:700;color:#202124;}
@@ -225,7 +261,7 @@ async function init() {
   </style>`)
 
   const gmBtn = document.createElement("button"); gmBtn.id="gmBtn"
-  gmBtn.innerHTML = `<div class="gm-th" style="background-image:url('https://tiles.stadiamaps.com/tiles/alidade_smooth/14/9258/5724.png?api_key=${STADIA}')"></div><span class="gm-lb">Rétegek</span>`
+  gmBtn.innerHTML = '<div class="gm-th" style="background-image:url(https://tile.openstreetmap.org/10/575/361.png)"></div><span class="gm-lb">Rétegek</span>'
   document.body.appendChild(gmBtn)
 
   const gmPanel = document.createElement("div"); gmPanel.id="gmPanel"
@@ -269,17 +305,15 @@ async function init() {
   }
 
   makeGrid("gmTypes", [
-    {id:"default",   label:"Alapértelmezett", layer:stadiaLayers.bright,    thumb:`https://tiles.stadiamaps.com/tiles/osm_bright/10/575/361.png?api_key=${STADIA}`},
-    {id:"satellite", label:"Műhold",          layer:gSatLayer,              thumb:"https://mt0.google.com/vt/lyrs=s&x=575&y=361&z=10"},
-    {id:"topo",      label:"Domborzat",        layer:topoLayer,              thumb:"https://tile.opentopomap.org/10/575/361.png"},
+    {id:"default",   label:"Alap (OSM)",  layer:osmLayer,              thumb:"https://tile.openstreetmap.org/10/575/361.png"},
+    {id:"satellite", label:"Műhold",       layer:gSatLayer,             thumb:"https://mt0.google.com/vt/lyrs=s&x=575&y=361&z=10"},
+    {id:"topo",      label:"Domborzat",    layer:topoLayer,             thumb:"https://tile.opentopomap.org/10/575/361.png"},
   ], "default", "gmStyles")
 
   makeGrid("gmStyles", [
-    {id:"smooth",     label:"Smooth",     layer:stadiaLayers.smooth,     thumb:`https://tiles.stadiamaps.com/tiles/alidade_smooth/14/9258/5724.png?api_key=${STADIA}`},
-    {id:"dark",       label:"Sötét",       layer:stadiaLayers.dark,       thumb:`https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/14/9258/5724.png?api_key=${STADIA}`},
-    {id:"outdoors",   label:"Szabadtéri",  layer:stadiaLayers.outdoors,   thumb:`https://tiles.stadiamaps.com/tiles/outdoors/14/9258/5724.png?api_key=${STADIA}`},
-    {id:"toner",      label:"Toner",       layer:stadiaLayers.toner,      thumb:`https://tiles.stadiamaps.com/tiles/stamen_toner/14/9258/5724.png?api_key=${STADIA}`},
-    {id:"watercolor", label:"Akvarell",    layer:stadiaLayers.watercolor, thumb:`https://tiles.stadiamaps.com/tiles/stamen_watercolor/14/9258/5724.jpg?api_key=${STADIA}`},
+    {id:"light",  label:"Világos",    layer:cartoLight, thumb:"https://a.basemaps.cartocdn.com/light_all/10/575/361.png"},
+    {id:"dark",   label:"Sötét",      layer:cartoDark,  thumb:"https://a.basemaps.cartocdn.com/dark_all/10/575/361.png"},
+    {id:"voyager",label:"Voyager",    layer:cartoVoy,   thumb:"https://a.basemaps.cartocdn.com/rastertiles/voyager/10/575/361.png"},
   ], null, "gmTypes")
 
 
@@ -287,60 +321,82 @@ async function init() {
     // BEJELENTÉSEK BETÖLTÉSE ÉS MEGJELENÍTÉSE A TÉRKÉPEN
     // ────────────────────────────────────────────────────────────────────────
     // ── Bejelentések ─────────────────────────────────────────
-  try{
-    const data=await api("reports_geo_list.php")
-    const items=data.items??[]
-    if(!items.length){setText($("#mapMsg"),"Nincs megjeleníthető bejelentés.");return}
-    const bounds=[]
-    items.forEach(r=>{
-      const lat=Number(r.latitude),lng=Number(r.longitude)
-      if(!Number.isFinite(lat)||!Number.isFinite(lng)) return
-      bounds.push([lat,lng])
-            const evImgs=r.evidence_image?r.evidence_image.split(',').map(s=>s.trim()).filter(Boolean):[]
-      const imgBase = (typeof window.CG_IMG_BASE !== 'undefined') ? window.CG_IMG_BASE : '../uploads/evidence/'
-      const ev=evImgs.length?`<br/>${evImgs.map(img=>`<img src="${imgBase}${escapeHtml(img)}" style="max-width:100%;max-height:100px;border-radius:4px;margin-top:8px;margin-right:4px;cursor:pointer" onclick="openLightbox(this.src)"/>`).join('')}`:""
-      // Navigáció: ha van saját pozíció, abból indul, különben Google Maps dönti el
-      const navUrl=`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`
-      const navBtn=`<br/><a href="javascript:void(0)" onclick="openNavigation(${lat},${lng})" style="display:inline-block;margin-top:8px;padding:6px 14px;background:#1a73e8;color:#fff;border-radius:8px;text-decoration:none;font-size:.8rem;font-weight:700">🧭 Navigáció</a>`
-      L.marker([lat,lng],{icon:markerIcon(r.status)}).addTo(map)
-        .bindPopup(`<b>#${r.id} – ${escapeHtml(r.title)}</b><br/>Állapot: <b>${escapeHtml(statusHu(r.status))}</b><br/>${escapeHtml(r.category)}<br/>${escapeHtml(r.created_by)}<br/><small style="color:#64748b">${escapeHtml(r.created_at)}</small>${ev}${navBtn}`)
+  // Automatikus frissítéshez: ID → { marker, status } tárolása
+  const knownReports = new Map()
+
+  function buildPopupHtml(r, lat, lng) {
+    const imgBase = detectImgBase('evidence')
+    const evImgs = r.evidence_image ? r.evidence_image.split(',').map(s=>s.trim()).filter(Boolean) : []
+    const ev = evImgs.length
+      ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;">${evImgs.map(img=>`<img src="${imgBase}${escapeHtml(img)}" style="width:80px;height:60px;object-fit:cover;border-radius:6px;cursor:pointer;flex-shrink:0;" onclick="openLightbox(this.src)"/>`).join('')}</div>`
+      : ''
+    const statusColors = { new:'#f59e0b', in_progress:'#0ea5e9', resolved:'#22c55e', rejected:'#ef4444' }
+    const sc = statusColors[r.status] || '#8da0c0'
+    const navBtn = `<a href="javascript:void(0)" onclick="openNavigation(${lat},${lng})" style="display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:7px 16px;background:#1a73e8;color:#fff;border-radius:8px;text-decoration:none;font-size:.82rem;font-weight:700;">🧭 Navigáció</a>`
+    return `<div style="min-width:180px;max-width:260px;font-family:inherit;">
+      <div style="font-weight:800;font-size:.95rem;color:#1a2035;margin-bottom:6px;line-height:1.3;">#${r.id} – ${escapeHtml(r.title)}</div>
+      <div style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:700;color:#fff;background:${sc};margin-bottom:6px;">${escapeHtml(statusHu(r.status))}</div>
+      <div style="font-size:.8rem;color:#374151;margin-bottom:2px;">📂 ${escapeHtml(r.category)}</div>
+      <div style="font-size:.8rem;color:#374151;margin-bottom:2px;">👤 ${escapeHtml(r.created_by)}</div>
+      <div style="font-size:.74rem;color:#6b7280;margin-bottom:4px;">🕐 ${escapeHtml(r.created_at)}</div>
+      ${ev}${navBtn}</div>`
+  }
+
+  function addMarker(map, r) {
+    const lat = Number(r.latitude), lng = Number(r.longitude)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+    const marker = L.marker([lat, lng], { icon: markerIcon(r.status) }).addTo(map)
+      .bindPopup(buildPopupHtml(r, lat, lng), { maxWidth: 280, minWidth: 200 })
+    knownReports.set(r.id, { marker, status: r.status })
+  }
+
+  function updateMarkerIfChanged(r) {
+    const entry = knownReports.get(r.id)
+    if (!entry || entry.status === r.status) return
+    const lat = Number(r.latitude), lng = Number(r.longitude)
+    entry.marker.setIcon(markerIcon(r.status))
+    entry.marker.setPopupContent(buildPopupHtml(r, lat, lng))
+    entry.status = r.status
+  }
+
+  try {
+    const data = await api("reports_geo_list.php")
+    const items = data.items ?? []
+    if (!items.length) { setText($("#mapMsg"), "Nincs megjeleníthető bejelentés.") }
+    const bounds = []
+    items.forEach(r => {
+      const lat = Number(r.latitude), lng = Number(r.longitude)
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+      bounds.push([lat, lng])
+      addMarker(map, r)
     })
-    if(bounds.length) map.fitBounds(bounds,{padding:[40,40]})
-  }catch(e){setText($("#mapMsg"),e.error||"Hiba")}
+    if (bounds.length) map.fitBounds(bounds, { padding: [40, 40] })
+  } catch(e) { setText($("#mapMsg"), e.error || "Hiba a betöltés során.") }
 
-  // Automatikus frissítés: 10 másodpercenként – új markerek hozzáadása
-  // Az első betöltéskor feljegyezzük az összes már megjelenített ID-t
-  const knownIds = new Set(items.map(r => r.id))
-
-  setInterval(async()=>{
-    try{
+  setInterval(async () => {
+    try {
       const refreshData = await api("reports_geo_list.php")
       const allItems = refreshData.items ?? []
-      const newItems = allItems.filter(r => !knownIds.has(r.id))
-      if(!newItems.length) return
+      const newItems = []
 
-      // Új markerek kirajzolása
-      newItems.forEach(r=>{
-        const lat=Number(r.latitude), lng=Number(r.longitude)
-        if(!Number.isFinite(lat)||!Number.isFinite(lng)) return
-        knownIds.add(r.id)
-        const evImgs=r.evidence_image?r.evidence_image.split(',').map(s=>s.trim()).filter(Boolean):[]
-        const imgBase=(typeof window.CG_IMG_BASE!=='undefined')?window.CG_IMG_BASE:'../uploads/evidence/'
-        const ev=evImgs.length?`<br/>${evImgs.map(img=>`<img src="${imgBase}${escapeHtml(img)}" style="max-width:100%;max-height:100px;border-radius:4px;margin-top:8px;margin-right:4px;cursor:pointer" onclick="openLightbox(this.src)"/>`).join('')}`:""
-        const navBtn=`<br/><a href="javascript:void(0)" onclick="openNavigation(${lat},${lng})" style="display:inline-block;margin-top:8px;padding:6px 14px;background:#1a73e8;color:#fff;border-radius:8px;text-decoration:none;font-size:.8rem;font-weight:700">🧭 Navigáció</a>`
-        L.marker([lat,lng],{icon:markerIcon(r.status)}).addTo(map)
-          .bindPopup(`<b>#${r.id} – ${escapeHtml(r.title)}</b><br/>Állapot: <b>${escapeHtml(statusHu(r.status))}</b><br/>${escapeHtml(r.category)}<br/>${escapeHtml(r.created_by)}<br/><small style="color:#64748b">${escapeHtml(r.created_at)}</small>${ev}${navBtn}`)
+      allItems.forEach(r => {
+        if (!knownReports.has(r.id)) {
+          newItems.push(r)
+          addMarker(map, r)
+        } else {
+          updateMarkerIfChanged(r)
+        }
       })
 
-      // Toast értesítés az új bejelentésekről
+      if (!newItems.length) return
       const toastEl = $("#mapMsg")
-      if(toastEl){
+      if (toastEl) {
         setText(toastEl, `🔔 ${newItems.length} új bejelentés érkezett`)
         toastEl._toastTimer && clearTimeout(toastEl._toastTimer)
-        toastEl._toastTimer = setTimeout(()=>{ setText(toastEl,'') }, 5000)
+        toastEl._toastTimer = setTimeout(() => { setText(toastEl, '') }, 5000)
       }
-    }catch(e){}
-  },10000)
+    } catch(e) {}
+  }, 10000)
 
   // GPS indítása: watchPosition folyamatosan frissíti a pozíciót
 // GPS indítása
@@ -422,7 +478,7 @@ let navInfoEl = null
 function showNavInfo(dist, mins) {
   if (!navInfoEl) {
     navInfoEl = document.createElement('div')
-    navInfoEl.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2000;background:#1a2035;border:1px solid rgba(148,183,255,.2);border-radius:16px;padding:12px 20px;display:flex;align-items:center;gap:16px;box-shadow:0 4px 24px rgba(0,0,0,.4);font-family:inherit'
+    navInfoEl.style.cssText = 'position:fixed;bottom:calc(110px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));left:50%;transform:translateX(-50%);z-index:2000;background:#1a2035;border:1px solid rgba(148,183,255,.2);border-radius:16px;padding:12px 20px;display:flex;align-items:center;gap:16px;box-shadow:0 4px 24px rgba(0,0,0,.4);font-family:inherit;white-space:nowrap;'
     document.body.appendChild(navInfoEl)
   }
   navInfoEl.innerHTML = `
@@ -482,4 +538,3 @@ function openNavigation(destLat, destLng) {
 // ────────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => { init() })
 
-<?php // refactor 7

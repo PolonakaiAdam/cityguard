@@ -27,7 +27,7 @@ $appJsVer = public_asset_version('assets/js/app.js');
   <link rel="shortcut icon" href="favicon.ico" />
   <title>Cityguard</title>
   <link rel="stylesheet" href="assets/css/style.css?v=<?php echo (int)$styleVer; ?>" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="assets/css/leaflet.css" />
 </head>
 <body>
 
@@ -469,7 +469,7 @@ $appJsVer = public_asset_version('assets/js/app.js');
   <img class="lightbox-content" id="lightbox-img" alt="Nagyított kép" />
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="assets/js/leaflet.js"></script>
 <script>
 window.CG_API_BASE = <?php echo json_encode(cg_api_url()); ?>;
 window.CG_IMG_BASE = <?php echo json_encode(rtrim(cg_detect_base_url(), '/') . '/public/uploads/evidence/'); ?>;

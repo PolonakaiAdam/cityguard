@@ -403,8 +403,14 @@ function showView(key) {
     // Kis késleltetés kell hogy a böngésző befejezze a display:none → block váltást
     setTimeout(() => {
       if (!reportMap) initReportMap()
-      else reportMap.invalidateSize()
-    }, 100)
+      else {
+        reportMap.invalidateSize()
+        // Ha van marker, centrálja rá a térképet
+        if (window.reportMarker) {
+          reportMap.setView(window.reportMarker.getLatLng(), Math.max(reportMap.getZoom(), 14))
+        }
+      }
+    }, 120)
   }
 }
 document.querySelectorAll('.btn-nav[data-view]').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)))
@@ -497,7 +503,7 @@ let ME=null, LOCATION={lat:null,lng:null,acc:null,method:'gps'}, reportMap=null,
 function initReportMap() {
   if (reportMap) return
   reportMap = L.map('reportMap').setView([47.4979,19.0402],13)
-  L.tileLayer('https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}.png?api_key=bca32bab-2628-4306-a25b-8fa429a5d10b',{maxZoom:20,attribution:'© Stadia Maps'}).addTo(reportMap)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',subdomains:'abc'}).addTo(reportMap)
   reportMap.on('click', e => { LOCATION={lat:e.latlng.lat,lng:e.latlng.lng,acc:null,method:'map'}; placeMarker(e.latlng); updateLocUI() })
 }
 
@@ -636,11 +642,15 @@ function addStatusControls(li, r, reloadFn) {
   const isCitizenOwner = isOwner && ME?.role === 'citizen'
   const isManager = canManage()
 
+  // Ha sem citizen-owner, sem manager, nincs mit megjeleníteni
+  if (!isCitizenOwner && !isManager) return
+
   const wrap = document.createElement('div')
   wrap.style.cssText = 'display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap'
 
-  // Csak lakos (citizen) saját bejelentésnél: MÓDOSÍTÁS gomb (törlés helyett)
-  if (isCitizenOwner) {
+  // Módosítás gomb: citizen saját bejelentésnél VAGY manager bármely bejelentésnél
+  const showEdit = isCitizenOwner || isManager
+  if (showEdit) {
     const editBtn = Object.assign(document.createElement('button'), {
       className: 'btn', type: 'button', textContent: '✏️ Módosítás'
     })
@@ -648,7 +658,8 @@ function addStatusControls(li, r, reloadFn) {
     editBtn.onclick = (e) => { e.stopPropagation(); openEditModal(r, reloadFn) }
     wrap.append(editBtn)
   }
-  // Manager / admin / staff / municipality saját is: TÖRLÉS + (ha saját citizen-owner is volt, az editBtn már fent van)
+
+  // Törlés gomb: csak manager (admin/staff/municipality)
   if (isManager) {
     const delBtn = Object.assign(document.createElement('button'), {
       className: 'btn btn-danger', type: 'button', textContent: '🗑 Törlés'
@@ -656,13 +667,6 @@ function addStatusControls(li, r, reloadFn) {
     delBtn.style.cssText = 'background:rgba(244,63,94,.15);border:1px solid rgba(244,63,94,.4);color:#f87171;border-radius:8px;padding:6px 14px;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit'
     delBtn.onclick = (e) => { e.stopPropagation(); deleteReport(r.id, reloadFn) }
     wrap.append(delBtn)
-    // Managers who are also owner get edit too
-    const editBtn2 = Object.assign(document.createElement('button'), {
-      className: 'btn', type: 'button', textContent: '✏️ Módosítás'
-    })
-    editBtn2.style.cssText = 'background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.35);color:#38bdf8;border-radius:8px;padding:6px 14px;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit'
-    editBtn2.onclick = (e) => { e.stopPropagation(); openEditModal(r, reloadFn) }
-    wrap.append(editBtn2)
   }
 
   if (wrap.children.length) li.appendChild(wrap)
@@ -750,9 +754,11 @@ async function openEditModal(r, reloadFn) {
   document.body.appendChild(overlay)
 
   // ── Térkép inicializálás ───────────────────────────────
-  requestAnimationFrame(() => {
+  // setTimeout kell, hogy a modal DOM renderelése teljesen befejeződjön
+  // mielőtt a Leaflet kiszámolja a méreteket
+  setTimeout(() => {
     editMap = L.map('editMapEl').setView([editLat, editLng], 16)
-    L.tileLayer('https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}.png?api_key=bca32bab-2628-4306-a25b-8fa429a5d10b', {maxZoom:20, attribution:'© Stadia Maps'}).addTo(editMap)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', subdomains:'abc'}).addTo(editMap)
     editMarker = L.marker([editLat, editLng], {draggable: true}).addTo(editMap)
     editMarker.on('dragend', ev => {
       editLat = ev.target.getLatLng().lat
@@ -764,8 +770,9 @@ async function openEditModal(r, reloadFn) {
       editMarker.setLatLng(e.latlng)
       updateEditLocInfo()
     })
+    editMap.invalidateSize()
     updateEditLocInfo()
-  })
+  }, 120)
 
   function updateEditLocInfo() {
     const el = box.querySelector('#editLocInfo')

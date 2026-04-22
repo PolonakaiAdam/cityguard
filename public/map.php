@@ -21,28 +21,59 @@ $mapJsVer = public_asset_version('assets/js/map.js');
   <link rel="shortcut icon" href="favicon.ico" />
   <title>Cityguard – Térkép</title>
   <link rel="stylesheet" href="assets/css/style.css?v=<?php echo (int)$styleVer; ?>" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="assets/css/leaflet.css" />
   <style>
-    html, body { height: 100%; overflow: hidden; }
+    html, body { height: 100%; overflow: hidden; margin: 0; padding: 0; }
 
-    /* Térkép teljes képernyős */
-    #map { position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; z-index: 1; }
-    .leaflet-bottom { bottom: var(--safe-bottom, 0) !important; }
-    .leaflet-control-zoom { margin-top: calc(68px + var(--safe-top)) !important; }
-
-    /* A térképoldal topbarja ugyanúgy viselkedjen, mint a főoldalon */
+    /* Topbar – pontosan ugyanolyan mint a főoldalon, de fixed pozícióban */
     .map-topbar {
       position: fixed !important;
       top: 0 !important;
       left: 0 !important;
       right: 0 !important;
       z-index: 1000 !important;
+      /* Mobil: flex, Desktop: grid – a style.css @media felülírja */
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: calc(10px + var(--safe-top, env(safe-area-inset-top, 0px))) calc(16px + var(--safe-right, env(safe-area-inset-right, 0px))) 10px calc(16px + var(--safe-left, env(safe-area-inset-left, 0px)));
+      background: rgba(6,12,26,0.92);
+      backdrop-filter: blur(24px) saturate(200%);
+      -webkit-backdrop-filter: blur(24px) saturate(200%);
+      border-bottom: 1px solid rgba(148,183,255,0.08);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.04), 0 8px 32px rgba(0,0,0,0.4);
+      box-sizing: border-box;
     }
     .map-topbar .brand { min-width: 0; flex: 1 1 auto; }
     .map-topbar .topbar-actions { flex-shrink: 0; }
 
+    /* Topbar tényleges magassága:
+       - padding-top:  calc(10px + safe-top)
+       - logo/tartalom: 44px
+       - padding-bottom: 10px
+       - összesen: 64px + safe-top
+       Desktopnál (960px+) a grid-template-rows: 52px + 6px padding = 58px explicit */
+    :root {
+      --topbar-height: calc(64px + var(--safe-top, env(safe-area-inset-top, 0px)));
+    }
+
+    /* Térkép teljes képernyős – topbar alatt kezdődik */
+    #map {
+      position: fixed;
+      top: var(--topbar-height);
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: calc(100dvh - var(--topbar-height));
+      z-index: 1;
+    }
+    .leaflet-bottom { bottom: var(--safe-bottom, env(safe-area-inset-bottom, 0px)) !important; }
+    .leaflet-control-zoom { margin-top: 12px !important; }
+
     #mapNav {
-      display: none !important;
+      display: none;
       align-items: center;
       justify-content: center;
       gap: 4px;
@@ -98,13 +129,42 @@ $mapJsVer = public_asset_version('assets/js/map.js');
       max-width: 120px;
     }
 
+    /* Leaflet popup stílus – sötét téma illeszkedés */
+    .leaflet-popup-content-wrapper {
+      border-radius: 12px !important;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18) !important;
+      padding: 0 !important;
+      overflow: hidden;
+    }
+    .leaflet-popup-content {
+      margin: 14px 16px !important;
+      line-height: 1.5 !important;
+      font-size: 0.85rem !important;
+    }
+    .leaflet-popup-tip-container { margin-top: -1px; }
+    .leaflet-popup-close-button {
+      font-size: 1.1rem !important;
+      color: #6b7280 !important;
+      top: 8px !important;
+      right: 10px !important;
+    }
+    .leaflet-popup-close-button:hover { color: #374151 !important; }
+
     #mapMsg {
-      position: fixed; bottom: calc(20px + var(--safe-bottom)); left: 50%;
+      position: fixed;
+      bottom: calc(20px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
+      left: 50%;
       transform: translateX(-50%);
-      background: rgba(6,12,26,0.9); border: 1px solid var(--border);
-      backdrop-filter: blur(12px); padding: 8px 16px; border-radius: 20px;
-      font-size: 0.84rem; color: #e8edf8; z-index: 2000;
-      white-space: nowrap; display: none;
+      background: rgba(6,12,26,0.92);
+      border: 1px solid var(--border, rgba(148,183,255,0.12));
+      backdrop-filter: blur(12px);
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 0.84rem;
+      color: #e8edf8;
+      z-index: 2500;
+      white-space: nowrap;
+      display: none;
       pointer-events: none;
     }
     #mapMsg:not(:empty) { display: block; }
@@ -130,7 +190,7 @@ $mapJsVer = public_asset_version('assets/js/map.js');
       background: linear-gradient(180deg, rgba(6,10,22,0.99) 0%, rgba(9,15,30,0.98) 100%);
       backdrop-filter: blur(32px) saturate(200%);
       -webkit-backdrop-filter: blur(32px) saturate(200%);
-      padding: calc(var(--safe-top) + 68px) 16px calc(18px + var(--safe-bottom));
+      padding: calc(var(--topbar-height) + 10px) 16px calc(18px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -190,12 +250,6 @@ $mapJsVer = public_asset_version('assets/js/map.js');
     }
 
     @media (max-width: 959px) {
-      .map-topbar {
-        display: flex !important;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-      }
       #mapNav { display: none !important; }
       #mapLogoutBtnDesktop { display: none !important; }
     }
@@ -209,8 +263,20 @@ $mapJsVer = public_asset_version('assets/js/map.js');
         padding: 0 20px !important;
         height: 58px !important;
         gap: 0 !important;
+        /* Safe-area-t desktopnál nem kell figyelni, de a --topbar-height-et igen */
       }
-      #mapNav { display: flex !important; }
+      /* Desktopnál a topbar fix 58px (grid-template-rows: 52px + border + implicit), felülírjuk */
+      :root { --topbar-height: 58px; }
+      #mapNav {
+        display: flex !important;
+        grid-column: 2;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+      }
+      .map-topbar .brand { grid-column: 1; justify-self: start; }
+      .map-topbar .topbar-actions { grid-column: 3; justify-self: end; }
       #mapHamburger,
       #mapNavDrawer,
       #mapNavOverlay { display: none !important; }
@@ -260,7 +326,7 @@ $mapJsVer = public_asset_version('assets/js/map.js');
     </div>
 
     <!-- Közép: Navigációs gombok (ugyanolyan mint a főoldalon) -->
-    <nav id="mapNav" style="display:none;align-items:center;justify-content:center;gap:4px;">
+    <nav id="mapNav">
       <a class="btn-nav map-nav-btn" href="<?php echo htmlspecialchars($appHome, ENT_QUOTES, "UTF-8"); ?>?view=newReport&amp;from=external" id="mapNavNewReport" style="display:none;">
         <i class="nav-icon">✦</i><span class="nav-label">Új bejelentés</span>
       </a>
@@ -327,7 +393,7 @@ $mapJsVer = public_asset_version('assets/js/map.js');
     <img class="lightbox-content" id="lightbox-img" alt="Nagyított kép" />
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="assets/js/leaflet.js"></script>
 <script>window.CG_MAP_API_BASE = <?php echo json_encode(cg_api_url()); ?>;
 window.CG_IMG_BASE = <?php echo json_encode(rtrim(cg_detect_base_url(), '/') . '/public/uploads/evidence/'); ?>;
 window.CG_PROFILE_IMG_BASE = <?php echo json_encode(rtrim(cg_detect_base_url(), '/') . '/public/uploads/profiles/'); ?>;

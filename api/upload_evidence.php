@@ -6,8 +6,19 @@ require_once __DIR__ . '/../app/api.php';
 $user      = require_login();
 $report_id = (int)($_POST['report_id'] ?? 0);
 
-if ($report_id <= 0)           json_response(['error' => 'Hibás report_id.'], 400);
+if ($report_id <= 0)             json_response(['error' => 'Hibás report_id.'], 400);
 if (!isset($_FILES['evidence'])) json_response(['error' => 'Nincs fájl.'], 400);
+
+// Csak saját bejelentéshez tölthet fel bizonyítékot citizen,
+// manager (admin/staff/municipality) bármely bejelentéshez tölthet fel
+$repStmt = db()->prepare('SELECT user_id FROM reports WHERE id = ?');
+$repStmt->execute([$report_id]);
+$repRow = $repStmt->fetch();
+if (!$repRow) json_response(['error' => 'Bejelentés nem található.'], 404);
+
+$isOwner   = (int)$repRow['user_id'] === (int)$user['id'];
+$isManager = cg_is_manager_role((string)$user['role']);
+if (!$isOwner && !$isManager) json_response(['error' => 'Nincs jogosultságod.'], 403);
 
 $file = $_FILES['evidence'];
 if ($file['error'] !== UPLOAD_ERR_OK) json_response(['error' => 'Feltöltési hiba: ' . $file['error']], 400);

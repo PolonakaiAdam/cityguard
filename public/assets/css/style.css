@@ -169,7 +169,7 @@ body {
   background: linear-gradient(180deg, rgba(6,10,22,0.99) 0%, rgba(9,15,30,0.98) 100%);
   backdrop-filter: blur(32px) saturate(200%);
   -webkit-backdrop-filter: blur(32px) saturate(200%);
-  padding: calc(var(--safe-top) + 68px) 16px calc(18px + var(--safe-bottom)) !important;
+  padding: calc(var(--safe-top) + 74px) 16px calc(18px + var(--safe-bottom)) !important;
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
